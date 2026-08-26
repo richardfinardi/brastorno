@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Programação de Produção - GRUPO BRASTORNO V1</title>
+    <title>Programação de Produção - GRUPO BRASTORNO V1.1</title>
 
     <!-- VERIFICAÇÃO DE AUTENTICAÇÃO -->
     <script>
@@ -52,7 +52,7 @@
                     <i data-lucide="cog" class="w-6 h-6"></i>
                 </div>
                 <div>
-                    <h1 class="text-lg sm:text-xl font-extrabold tracking-wide text-white leading-tight">GRUPO BRASTORNO V1</h1>
+                    <h1 class="text-lg sm:text-xl font-extrabold tracking-wide text-white leading-tight">GRUPO BRASTORNO V1.1</h1>
                     <p class="text-xs text-brastorno-green font-semibold">Controle e Programação de Produção</p>
                 </div>
             </div>
@@ -292,16 +292,26 @@
                                 <i data-lucide="message-square" class="w-3 h-3 text-brastorno-green"></i> Observação
                             </span>
                             <button id="btnEditObs_${nOs}" onclick="habilitarEdicaoObs('${nOs}')" class="text-[10px] font-bold text-brastorno-green hover:text-brastorno-greenHover underline flex items-center gap-1">
-                                <i data-lucide="edit-3" class="w-3 h-3"></i> Alterar
+                                <i data-lucide="plus-circle" class="w-3 h-3"></i> Adicionar
                             </button>
                         </div>
 
+                        <!-- Visualização da Observação -->
                         <div id="viewObs_${nOs}" class="text-[11px] text-slate-700 font-medium whitespace-pre-wrap leading-relaxed min-h-[20px]">
                             ${obsTexto ? obsTexto : '<span class="text-slate-400 italic">Sem observação cadastrada.</span>'}
                         </div>
 
-                        <div id="editObsContainer_${nOs}" class="hidden space-y-2 pt-1 border-t border-slate-200">
-                            <textarea id="textareaObs_${nOs}" rows="3" class="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-brastorno-green font-medium custom-scroll" placeholder="Digite a observação..."></textarea>
+                        <!-- Formulário de Nova Observação -->
+                        <div id="editObsContainer_${nOs}" class="hidden space-y-2 pt-2 border-t border-slate-200">
+                            <!-- Histórico Anterior Bloqueado -->
+                            ${obsTexto ? `
+                                <div class="p-2 bg-slate-200/60 border border-slate-300 rounded-lg text-[10.5px] text-slate-600 font-medium whitespace-pre-wrap max-h-24 overflow-y-auto custom-scroll select-none" title="Histórico anterior (somente leitura)">
+                                    ${obsTexto}
+                                </div>
+                            ` : ''}
+
+                            <!-- Campo para Nova Entrada -->
+                            <textarea id="textareaObs_${nOs}" rows="2" class="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-brastorno-green font-medium custom-scroll" placeholder="Digite a nova observação..."></textarea>
                             
                             <div class="flex justify-end gap-1.5">
                                 <button onclick="cancelarEdicaoObs('${nOs}')" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-[10px] transition">
@@ -320,7 +330,6 @@
 
         function habilitarEdicaoObs(nOs) {
             const item = rawData.find(i => String(i.n_os).trim() === String(nOs).trim());
-            const currentObs = item ? (item.obs_texto_limpo || '') : '';
 
             const viewEl = document.getElementById(`viewObs_${nOs}`);
             const containerEl = document.getElementById(`editObsContainer_${nOs}`);
@@ -330,9 +339,23 @@
             if (viewEl) viewEl.classList.add('hidden');
             if (btnEdit) btnEdit.classList.add('hidden');
             if (containerEl) containerEl.classList.remove('hidden');
+
             if (textarea) {
-                textarea.value = currentObs;
+                const usuarioLogado = localStorage.getItem('brastorno_usuario_nome') || 'USUÁRIO';
+                const hoje = new Date();
+                const dia = String(hoje.getDate()).padStart(2, '0');
+                const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+                const ano = hoje.getFullYear();
+                
+                // Formato padrão: [NOME_USUARIO DD/MM/AAAA] 
+                const prefixo = `[${usuarioLogado.toUpperCase()} ${dia}/${mes}/${ano}] `;
+                
+                textarea.value = prefixo;
                 textarea.focus();
+                
+                // Move o cursor diretamente para o final do texto
+                const len = textarea.value.length;
+                textarea.setSelectionRange(len, len);
             }
         }
 
@@ -348,9 +371,21 @@
 
         async function salvarObservacao(nOs) {
             const textarea = document.getElementById(`textareaObs_${nOs}`);
-            if (textarea) textarea.blur(); // Fecha o teclado do celular
+            if (textarea) textarea.blur(); // Fecha teclado do celular
 
-            const novaObs = textarea ? String(textarea.value) : '';
+            const item = rawData.find(i => String(i.n_os).trim() === String(nOs).trim());
+            const obsAntiga = item ? (item.obs_texto_limpo || '').trim() : '';
+            const novaLinha = textarea ? String(textarea.value).trim() : '';
+
+            // Se o usuário não escreveu nada além do cabeçalho
+            if (!novaLinha) {
+                cancelarEdicaoObs(nOs);
+                return;
+            }
+
+            // Junta a observação existente com a nova linha inserida no final
+            const obsFinal = obsAntiga ? `${obsAntiga}\n${novaLinha}` : novaLinha;
+
             const btnSave = document.getElementById(`btnSaveObs_${nOs}`);
 
             try {
@@ -366,7 +401,7 @@
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ obs_texto_limpo: novaObs })
+                    body: JSON.stringify({ obs_texto_limpo: obsFinal })
                 });
 
                 if (!response.ok) {
@@ -374,10 +409,9 @@
                     throw new Error(errData.detail || 'Erro ao gravar a observação.');
                 }
 
-                // Atualiza a memória local
-                const target = rawData.find(i => String(i.n_os).trim() === String(nOs).trim());
-                if (target) {
-                    target.obs_texto_limpo = novaObs;
+                // Atualiza em memória local
+                if (item) {
+                    item.obs_texto_limpo = obsFinal;
                 }
 
                 cancelarEdicaoObs(nOs);
