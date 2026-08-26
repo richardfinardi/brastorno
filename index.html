@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Programação de Produção - GRUPO BRASTORNO V1.1</title>
+    <title>V1.2 - Programação de Produção - GRUPO BRASTORNO</title>
 
     <!-- VERIFICAÇÃO DE AUTENTICAÇÃO -->
     <script>
@@ -52,8 +52,8 @@
                     <i data-lucide="cog" class="w-6 h-6"></i>
                 </div>
                 <div>
-                    <h1 class="text-lg sm:text-xl font-extrabold tracking-wide text-white leading-tight">GRUPO BRASTORNO V1.1</h1>
-                    <p class="text-xs text-brastorno-green font-semibold">Controle e Programação de Produção</p>
+                    <h1 class="text-lg sm:text-xl font-extrabold tracking-wide text-white leading-tight">GRUPO BRASTORNO</h1>
+                    <p class="text-xs text-brastorno-green font-semibold">Controle e Programação de Produção - V1.2</p>
                 </div>
             </div>
 
@@ -310,8 +310,14 @@
                                 </div>
                             ` : ''}
 
-                            <!-- Campo para Nova Entrada -->
-                            <textarea id="textareaObs_${nOs}" rows="2" class="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-brastorno-green font-medium custom-scroll" placeholder="Digite a nova observação..."></textarea>
+                            <!-- Badge Fixo com Usuário e Data (Imutável) -->
+                            <div class="flex items-center gap-1.5 px-2 py-1 bg-brastorno-blue text-white rounded-md text-[10px] font-bold w-fit shadow-xs">
+                                <i data-lucide="user-plus" class="w-3 h-3 text-brastorno-green"></i>
+                                <span id="labelPrefix_${nOs}"></span>
+                            </div>
+
+                            <!-- Campo Limpo Apenas para o Texto da Nova Observação -->
+                            <textarea id="textareaObs_${nOs}" rows="2" class="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-brastorno-green font-medium custom-scroll" placeholder="Digite sua nova observação aqui..."></textarea>
                             
                             <div class="flex justify-end gap-1.5">
                                 <button onclick="cancelarEdicaoObs('${nOs}')" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-[10px] transition">
@@ -329,34 +335,31 @@
         }
 
         function habilitarEdicaoObs(nOs) {
-            const item = rawData.find(i => String(i.n_os).trim() === String(nOs).trim());
-
             const viewEl = document.getElementById(`viewObs_${nOs}`);
             const containerEl = document.getElementById(`editObsContainer_${nOs}`);
             const btnEdit = document.getElementById(`btnEditObs_${nOs}`);
             const textarea = document.getElementById(`textareaObs_${nOs}`);
+            const labelPrefix = document.getElementById(`labelPrefix_${nOs}`);
 
             if (viewEl) viewEl.classList.add('hidden');
             if (btnEdit) btnEdit.classList.add('hidden');
             if (containerEl) containerEl.classList.remove('hidden');
 
+            const usuarioLogado = localStorage.getItem('brastorno_usuario_nome') || 'USUÁRIO';
+            const hoje = new Date();
+            const dia = String(hoje.getDate()).padStart(2, '0');
+            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+            const ano = hoje.getFullYear();
+            
+            const prefixoFormatado = `[${usuarioLogado.toUpperCase()} ${dia}/${mes}/${ano}]`;
+            
+            if (labelPrefix) labelPrefix.textContent = prefixoFormatado;
+
             if (textarea) {
-                const usuarioLogado = localStorage.getItem('brastorno_usuario_nome') || 'USUÁRIO';
-                const hoje = new Date();
-                const dia = String(hoje.getDate()).padStart(2, '0');
-                const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-                const ano = hoje.getFullYear();
-                
-                // Formato padrão: [NOME_USUARIO DD/MM/AAAA] 
-                const prefixo = `[${usuarioLogado.toUpperCase()} ${dia}/${mes}/${ano}] `;
-                
-                textarea.value = prefixo;
+                textarea.value = '';
                 textarea.focus();
-                
-                // Move o cursor diretamente para o final do texto
-                const len = textarea.value.length;
-                textarea.setSelectionRange(len, len);
             }
+            lucide.createIcons();
         }
 
         function cancelarEdicaoObs(nOs) {
@@ -371,20 +374,29 @@
 
         async function salvarObservacao(nOs) {
             const textarea = document.getElementById(`textareaObs_${nOs}`);
-            if (textarea) textarea.blur(); // Fecha teclado do celular
+            if (textarea) textarea.blur();
 
             const item = rawData.find(i => String(i.n_os).trim() === String(nOs).trim());
             const obsAntiga = item ? (item.obs_texto_limpo || '').trim() : '';
-            const novaLinha = textarea ? String(textarea.value).trim() : '';
+            const textoDigitado = textarea ? String(textarea.value).trim() : '';
 
-            // Se o usuário não escreveu nada além do cabeçalho
-            if (!novaLinha) {
+            // Se nada foi digitado, apenas cancela a edição
+            if (!textoDigitado) {
                 cancelarEdicaoObs(nOs);
                 return;
             }
 
-            // Junta a observação existente com a nova linha inserida no final
-            const obsFinal = obsAntiga ? `${obsAntiga}\n${novaLinha}` : novaLinha;
+            const usuarioLogado = localStorage.getItem('brastorno_usuario_nome') || 'USUÁRIO';
+            const hoje = new Date();
+            const dia = String(hoje.getDate()).padStart(2, '0');
+            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+            const ano = hoje.getFullYear();
+            
+            // Monta obrigatoriamente a nova linha no servidor
+            const novaLinhaComCabecalho = `[${usuarioLogado.toUpperCase()} ${dia}/${mes}/${ano}] ${textoDigitado}`;
+
+            // Concatena com o histórico pré-existente
+            const obsFinal = obsAntiga ? `${obsAntiga}\n${novaLinhaComCabecalho}` : novaLinhaComCabecalho;
 
             const btnSave = document.getElementById(`btnSaveObs_${nOs}`);
 
@@ -409,7 +421,6 @@
                     throw new Error(errData.detail || 'Erro ao gravar a observação.');
                 }
 
-                // Atualiza em memória local
                 if (item) {
                     item.obs_texto_limpo = obsFinal;
                 }
