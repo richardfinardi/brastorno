@@ -77,8 +77,14 @@
                     throw new Error(data.detail || 'Usuário ou senha inválidos.');
                 }
 
+                // Salva apenas as credenciais essenciais do usuário logado
                 localStorage.setItem('brastorno_token', data.access_token);
                 localStorage.setItem('brastorno_usuario_nome', data.usuario);
+
+                // Limpa quaisquer chaves antigas de permissão
+                localStorage.removeItem('columbia_perm_faturamento');
+                localStorage.removeItem('columbia_perm_finalizacao');
+                localStorage.removeItem('columbia_perm_anexo');
 
                 window.location.href = './index.html';
 
