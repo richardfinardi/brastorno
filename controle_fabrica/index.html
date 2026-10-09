@@ -68,6 +68,49 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .cache-state.warn{background:#fff5e3;border-color:#efd7a2;color:#916217}
 .grid-table td.desc{max-width:370px;white-space:normal}.grid-table .tag.bad{background:#fff0ef;color:#c7514c}
 @media(max-width:720px){.queue,.role-list{grid-template-columns:1fr}.updated-block{text-align:left;margin-top:8px}.kanban{grid-template-columns:repeat(10,225px)}}
+/* Controle compacto / edição e filtros em colunas */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:9px 0 10px}
+.kpi{padding:10px 14px;min-height:62px;border-radius:10px;box-shadow:none}
+.kpi:before{width:3px}
+.kpi .label{font-size:10px;line-height:1.1;letter-spacing:0}
+.kpi .num{font-size:19px;line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .hint{display:none}
+.hero{margin-bottom:9px}.hero h1{font-size:22px}.wrap{padding-top:12px}
+.panel-head{padding:11px 16px}.panel-head h2{font-size:15px}.panel-head p{font-size:11px}
+.filters{padding:11px 14px}.search-help{font-size:10px;padding:0 14px 9px}
+#filterPanel{margin-bottom:10px}#filterPanel .chips{padding-top:0}
+.table-wrap{max-height:65vh;overflow:auto;position:relative}
+.grid-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;table-layout:auto;font-size:12px}
+.grid-table thead th{min-width:110px;white-space:nowrap;padding:8px 10px;position:sticky;top:0;z-index:8}
+.grid-table thead tr:nth-child(2) th{top:34px;z-index:7;padding:5px 8px;background:#f9fafc;border-bottom:1px solid #dbe2ed}
+.grid-table th button{background:transparent;border:0;font-size:10px;font-weight:800;color:#52647e;cursor:pointer;text-align:left}
+.grid-table .column-search{font-size:11px;font-weight:500;width:100%;min-width:65px;max-width:240px;box-sizing:border-box;padding:5px 7px;border-radius:7px;border:1px solid #d4dce7;background:white;color:#1d2a40;outline:none}
+.grid-table .column-search:focus{border-color:#708e34;box-shadow:0 0 0 2px #708e3433}
+.grid-table th:nth-child(1),.grid-table td:nth-child(1){min-width:135px;width:135px;left:0;position:sticky;z-index:5}
+.grid-table th:nth-child(2),.grid-table td:nth-child(2){min-width:215px;width:215px;left:135px;position:sticky;z-index:5}
+.grid-table thead tr:first-child th:nth-child(-n+2){z-index:15;background:#f0f3f8}
+.grid-table thead tr:nth-child(2) th:nth-child(-n+2){z-index:14;background:#f9fafc}
+.grid-table th:nth-child(5),.grid-table td:nth-child(5){min-width:290px}
+.grid-table th:nth-child(12),.grid-table td:nth-child(12){min-width:210px}
+.grid-table th:nth-child(15),.grid-table td:nth-child(15){min-width:265px}
+.grid-table td{padding:8px 10px;height:40px}
+.grid-table tr:hover td:nth-child(-n+2){background:#f8faf3}
+.grid-table td .tag{font-size:10px}.grid-table .action{padding:5px 8px}
+.row-edit{border:0;background:transparent;color:#6b8e23;padding:2px 3px;margin-left:3px;cursor:pointer;font-weight:900}
+.row-edit:hover{background:#e9f0df;border-radius:5px}
+.pager{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pager button{border:1px solid #dce3eb;border-radius:7px;background:white;cursor:pointer;padding:4px 10px}
+.pager button:disabled{opacity:.3;cursor:default}
+.pending-badge{display:inline-block;border:1px solid #eecb81;background:#fff3d9;color:#885809;font-size:10px;font-weight:850;border-radius:7px;padding:4px 7px;white-space:nowrap}
+.mini-card.pending-card{border:2px dashed #dbaa3f;background:#fffdf6}
+.mini-card .pending-badge{margin-top:7px}
+.edit-section{border:1px solid #e1e7ef;border-radius:12px;padding:14px;margin-top:12px;background:#fafcfe}
+.edit-section h3{margin:0 0 11px;font-size:13px;color:#203657}
+.edit-section .field input,.edit-section .field textarea{background:white}
+.edit-section .cols{grid-template-columns:repeat(2,minmax(150px,1fr))}
+.log-preview{max-height:150px;overflow:auto;white-space:pre-wrap;background:#f5f7fa;border:1px solid #e4e9f0;border-radius:9px;padding:10px;font:11px/1.5 Consolas,monospace;color:#59677b}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.kpi{padding:8px}.kpi .num{font-size:17px}}
+@media(max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.edit-section .cols{grid-template-columns:1fr}.updated-block{display:none}}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>ERP CPS • Ambiente integrado v1.2</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -76,7 +119,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <section class="hero"><div><div class="eyebrow">Gestão industrial • ERP CPS</div><h1>Controle de Fábrica</h1>
 <div class="subtitle">Quatro visões conectadas para acompanhar carteira, programação, andamento, responsabilidades e faturamento.</div></div><div class="subtitle updated-block"><div id="updated">Carregando dados</div><span id="cacheState" class="cache-state loading">Conectando…</span></div></section>
 <div id="notice" class="notice">Validando o acesso ao Controle de Fábrica…</div>
-<div class="callout"><strong>✓ Integrado ao CPS</strong><span>Esta é a versão operacional da demonstração, com as quatro visões conectadas aos dados reais. As alterações de status pelo Kanban passam pela aprovação do gestor antes de serem efetivadas no ERP.</span></div>
+
 <nav class="tabs hidden" id="tabs" aria-label="Telas do controle">
 <button class="tab active" id="tab-fabric" onclick="changeView('fabric')"><em>A.</em> Gestão de Fábrica</button>
 <button class="tab" id="tab-status" onclick="changeView('status')"><em>B.</em> Gestão por Status</button>
@@ -85,20 +128,20 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <button class="tab hidden" id="tab-approval" onclick="changeView('approval')">✓ Aprovações <span id="approvalCount"></span></button></nav>
 <div class="kpis hidden" id="metrics"></div>
 <section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquisa e filtros sincronizados entre as abas e o Kanban.</p></div>
-<div class="panel-actions"><button class="btn small" onclick="advancedToggle()">☷ Filtro por coluna</button><button class="btn small" onclick="clearFilters()">Limpar filtros</button><button class="btn small" onclick="exportCSV()">↓ CSV</button></div></div>
-<div class="filters"><div class="field search"><label>Pesquisa geral dinâmica</label><input id="q" placeholder="OS, cliente, produto, orçamento, NF, observação…"></div>
+<div class="panel-actions"><button class="btn small" id="toggleFiltersBtn" onclick="toggleFilters()">▴ Recolher filtros</button><button class="btn small" onclick="clearFilters()">Limpar</button></div></div>
+<div id="filtersBody"><div class="filters"><div class="field search"><label>Pesquisa geral dinâmica</label><input id="q" placeholder="OS, cliente, produto, orçamento, NF, observação…"></div>
 <div class="field"><label>Tipo</label><select id="typeFilter"><option value="">Todos</option></select></div>
 <div class="field"><label>Status</label><select id="statusFilter"><option value="">Todos</option></select></div>
 <div class="field"><label>Previsão</label><select id="periodFilter"><option value="">Todos</option><option value="late">Vencidos / urgentes</option><option value="soon">Próximos 30 dias</option><option value="noos">Orçamentos sem OS</option><option value="closed">Concluídos</option></select></div></div>
-<div class="search-help">Dica: use <b>+britador -concluído</b> para incluir "britador" e excluir "concluído". Os filtros por coluna podem ser combinados.</div><div class="filter-box" id="advanced"><div class="field"><label>Coluna</label><select id="columnSelect"></select></div>
+<div class="search-help">Dica: use <b>+britador -concluído</b> para incluir "britador" e excluir "concluído". Os filtros por coluna podem ser combinados.</div><div class="filter-box hidden" id="advanced"><div class="field"><label>Coluna</label><select id="columnSelect"></select></div>
 <div class="field" style="flex:2"><label>Contém</label><input id="columnValue" placeholder="Texto a localizar"></div>
-<button class="btn primary" onclick="addColumnFilter()">Adicionar</button></div><div class="chips" id="chips"></div></section>
+<button class="btn primary" onclick="addColumnFilter()">Adicionar</button></div><div class="chips" id="chips"></div></div></section>
 <main id="screen"><div class="skel">Conectando à API…</div></main>
-<footer class="footnote">BRASTORNO • Dados integrados ao ERP CPS. Movimentações no Kanban exigem aprovação. A demonstração permanece independente.</footer>
+
 </div>
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
 <div class="modal" role="dialog" aria-modal="true"><div class="modalhead"><h2 id="modalTitle">Detalhes do item</h2><button class="btn small" onclick="closeModal()">Fechar ✕</button></div>
-<div class="modalbody" id="modalBody"></div><div class="modalfoot"><button class="btn" onclick="closeModal()">Fechar</button></div></div></div>
+<div class="modalbody" id="modalBody"></div><div class="modalfoot"><button class="btn" onclick="closeModal()">Fechar</button><button class="btn primary hidden" id="btnSaveModal" onclick="saveModal()">Salvar alterações</button></div></div></div>
 <script>
 (function(){
 'use strict';
@@ -109,6 +152,7 @@ var codeStatus={6:'ENGENHARIA',7:'PCP',8:'COMPRAS',9:'PRODUÇÃO',10:'QUALIDADE'
 var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['month','MÊS'],['year','ANO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
 var cacheKey='',cacheStamp=0,lastRefreshAt=0,fetchingData=null,hasData=false,initializing=null;
 var CACHE_NAME='brastorno_fabrica_cache_v3',CACHE_TABLE='snapshots',CACHE_SCHEMA=3;
+var baseRows=[],pendingRequests=[],pageIndex=1,pageSize=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
 var $=function(x){return document.getElementById(x)};
