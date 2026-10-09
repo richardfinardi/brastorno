@@ -177,6 +177,8 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 @media(max-width:600px){.approval-grid{grid-template-columns:1fr}.approval-toolbar{gap:7px}}
 
 .field-help{display:block;color:#70819a;font-size:11px;margin-top:4px}
+.card-undo{margin-top:7px;border:1px solid #e0c98c;background:#fff8e8;color:#765412;border-radius:7px;padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer;display:block;width:100%;text-align:center}
+.card-undo:hover{background:#fff0bf}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -520,9 +522,9 @@ function drawKanban(arr){
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
    '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong>'+
-   '<span class="drag-handle '+(r.pending?'disabled':'')+'" title="'+(r.pending?'Aguardando aprovação':'Arraste por aqui')+'" role="button" aria-label="Arrastar OS" draggable="'+(r.pending?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
+   '<span class="drag-handle '+(r.pending&&!canAdjustPending(r)?'disabled':'')+'" title="'+(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui')+'" role="button" aria-label="Arrastar OS" draggable="'+(r.pending&&!canAdjustPending(r)?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
    '<div class="meta"><span>'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+
-   (r.pending?'<span class="pending-badge">⏳ Aguardando aprovação</span>':'')+
+   (r.pending?'<span class="pending-badge">⏳ '+esc(r.previousStatus)+' → '+esc(r.status)+' • Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
    (r.urgent?badge(r.situation,'bad'):'')+'</div>'
   }).join('');
   var extra=items.length>limit?'<button class="btn small" onclick="showMoreLane('+JSON.stringify(s).replace(/"/g,'&quot;')+')">Mostrar mais ('+(items.length-limit)+')</button>':'';
@@ -753,31 +755,61 @@ async function saveModal(){
 }
 window.saveModal=saveModal;
 function closeModal(){$('overlay').classList.remove('show');selected=null}window.closeModal=closeModal;
-function dragStart(e,id){var r=rows.find(function(x){return x.id===id});if(!r||r.pending){e.preventDefault();return}dragging=id;e.stopPropagation();e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';var card=e.currentTarget.closest('.mini-card');if(card)card.classList.add('dragging')}window.dragStart=dragStart;
+function canAdjustPending(r){return !!(r&&r.pending&&r.pendingInfo&&r.pendingInfo.id&&profile&&(profile.gestor||normalize(r.pendingInfo.usuario)===normalize(profile.name)))}
+function dragStart(e,id){var r=rows.find(function(x){return x.id===id});if(!r||(r.pending&&!canAdjustPending(r))){e.preventDefault();return}dragging=id;e.stopPropagation();e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';var card=e.currentTarget.closest('.mini-card');if(card)card.classList.add('dragging')}window.dragStart=dragStart;
 function dragEnd(){dragging=null;document.querySelectorAll('.drop-target,.dragging').forEach(function(x){x.classList.remove('drop-target','dragging')})}window.dragEnd=dragEnd;
 function allowDrop(e){e.preventDefault();e.currentTarget.classList.add('drop-target')}window.allowDrop=allowDrop;
 function dragLeave(e){e.currentTarget.classList.remove('drop-target')}window.dragLeave=dragLeave;
 
+async function adjustPending(r,to){
+ if(!r||!canAdjustPending(r))return;
+ var pend=r.pendingInfo,orig=r.previousStatus,cancel=to===orig,old=r.status;
+ if(to===old)return;
+ var pergunta=cancel?'Desfazer a movimentação da OS '+(r.os||r.quote)+' e devolver para '+orig+'?':
+   'Mudar a movimentação pendente da OS '+(r.os||r.quote)+' de '+old+' para '+to+'?';
+ if(!confirm(pergunta))return;
+ try{
+  var response=await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(pend.id)+'/redirecionar',{
+   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status_novo:to})
+  });
+  if(response.status==='CANCELADO'){
+   pendingRequests=pendingRequests.filter(function(p){return String(p.id)!==String(pend.id)});
+  }else{
+   pendingRequests=pendingRequests.map(function(p){return String(p.id)===String(pend.id)?
+     Object.assign({},p,{status_novo:to}):p});
+  }
+  applyPendingVisuals();setupFilters();render();
+  setNotice(cancel?'Movimentação desfeita. O cartão voltou à etapa original.':'Destino alterado. Aguardando aprovação.','ok');
+  // Atualiza também a fila do gestor sem esperar a consulta pesada de dados.
+  await Promise.allSettled([loadPending(),profile.gestor?loadApprovals():Promise.resolve()]);
+ }catch(err){setNotice('Não foi possível alterar a movimentação: '+err.message,'error')}
+}
+async function undoPending(id){
+ var r=rows.find(function(x){return x.id===id});if(r&&r.pending)await adjustPending(r,r.previousStatus)
+}
+window.undoPending=undoPending;
 async function dropOn(e,to){
- e.preventDefault();e.currentTarget.classList.remove('drop-target');
+ e.preventDefault();
+ if(e.currentTarget&&e.currentTarget.classList)e.currentTarget.classList.remove('drop-target');
  var id=(e.dataTransfer&&e.dataTransfer.getData('text/plain'))||dragging;
  dragEnd();
  var r=rows.find(function(x){return x.id===id});
- if(!r||r.status===to||r.pending)return;
+ if(!r||r.status===to)return;
+ if(r.pending){await adjustPending(r,to);return}
  if(!profile.gestor&&!profile.roles.includes(r.status))return;
- if(!confirm('Mover '+(r.os||r.quote)+' de '+r.status+' para '+to+'?\n\nAguardará aprovação do gestor.'))return;
+ if(!confirm('Mover '+(r.os||r.quote)+' de '+r.status+' para '+to+'?\\n\\nAguardará aprovação do gestor.'))return;
  try{
-  var result=await api('/controle_fabrica/solicitacoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+  var result=await api('/controle_fabrica/solicitacoes',{
+   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     cod_os:osCode(r),n_os:r.os,guid_linha:read(r.raw,['guid_linha']),
     status_anterior:r.status,status_novo:to,origem:'KANBAN'
-  })});
+   })
+  });
   pendingRequests=pendingRequests.filter(function(p){return String(p.cod_os)!==String(osCode(r))});
   pendingRequests.push({id:result.id,cod_os:osCode(r),n_os:r.os,status_anterior:r.status,status_novo:to,usuario:profile.name,status:'PENDENTE'});
-  applyPendingVisuals();render();
+  applyPendingVisuals();setupFilters();render();
   setNotice('Movimentação aguardando aprovação.','ok');
-  // Persiste imediatamente o visual no destino, mesmo se o ERP ainda não mudou.
-  loadPending();
-  if(profile.gestor)loadApprovals()
+  await Promise.allSettled([loadPending(),profile.gestor?loadApprovals():Promise.resolve()]);
  }catch(err){setNotice('Não foi possível movimentar: '+err.message,'error')}
 }
 window.dropOn=dropOn;
