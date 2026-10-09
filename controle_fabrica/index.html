@@ -221,7 +221,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 (function(){
 'use strict';
 var API='https://brastorno.consultoriarf.net';
-var STATUS=['ENGENHARIA','PCP','COMPRAS','PRODUÇÃO','QUALIDADE','FATURAMENTO','EXPEDIÇÃO','CONCLUÍDO','PARALISADO','CANCELADO'];
+var STATUS=['SEM OS','ENGENHARIA','PCP','COMPRAS','PRODUÇÃO','QUALIDADE','FATURAMENTO','EXPEDIÇÃO','CONCLUÍDO','FATURADO','PARALISADO','CANCELADO'];
 var PERMS={'ENGENHARIA':'U_ENG','PCP':'U_PCP','COMPRAS':'U_COMPRAS','PRODUÇÃO':'U_PROD','QUALIDADE':'U_CQ','FATURAMENTO':'U_FAT','EXPEDIÇÃO':'U_EXP'};
 var codeStatus={6:'ENGENHARIA',7:'PCP',8:'COMPRAS',9:'PRODUÇÃO',10:'QUALIDADE',11:'FATURAMENTO',12:'EXPEDIÇÃO',13:'CONCLUÍDO',14:'PARALISADO',15:'CANCELADO'};
 var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['month','MÊS'],['year','ANO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
@@ -334,19 +334,46 @@ function applyRows(raw,stamp,fromCache){
 }
 function parseProfile(p){var src=(p&&p.permissoes)||p&&p.permissions||p||{};var gestor=truthy(read(src,['U_GESTOR','gestor']));var roles=STATUS.filter(function(s){return PERMS[s]&&truthy(read(src,[PERMS[s]]))});return {gestor:gestor,roles:roles,name:read(p,['usuario','nome','username'])||localStorage.getItem('brastorno_usuario_nome')||'USUÁRIO'}}
 function flattenResult(v){if(Array.isArray(v))return v;if(!v||typeof v!=='object')return [];for(var i=0;i<['dados','data','resultado','resultados','itens','items','rows','registros','records'].length;i++){var x=read(v,[['dados','data','resultado','resultados','itens','items','rows','registros','records'][i]]);if(Array.isArray(x))return x;if(x&&typeof x==='object'){var y=flattenResult(x);if(y.length)return y}}return []}
-function statusOf(raw){var n=Number(read(raw,['cod_status','status_codigo','codigo_status']));if(codeStatus[n])return codeStatus[n];var s=normalize(read(raw,['status_servico','status_os','status','fase']));if(s.includes('ENGENH'))return 'ENGENHARIA';if(s.includes('PCP'))return 'PCP';if(s.includes('COMPRA'))return 'COMPRAS';if(s.includes('PRODU'))return 'PRODUÇÃO';if(s.includes('QUALI'))return 'QUALIDADE';if(s.includes('FATUR'))return 'FATURAMENTO';if(s.includes('EXPED'))return 'EXPEDIÇÃO';if(s.includes('CONCLU'))return 'CONCLUÍDO';if(s.includes('PARALIS'))return 'PARALISADO';if(s.includes('CANCEL'))return 'CANCELADO';return 'SEM STATUS'}
+function statusOf(raw){
+  // O SQL só marca FATURADO após confirmar 100% da quantidade faturada.
+  // O status comercial calculado prevalece apenas na visualização, sem alterar o CPS.
+  var situacao=normalize(read(raw,['situacao','situacao_prazo']));
+  var origem=normalize(read(raw,['status','status_calculado']));
+  if(situacao==='FATURADO'||origem==='FATURADO'||truthy(read(raw,['faturado_total'])))return 'FATURADO';
+  if(origem==='SEM OS')return 'SEM OS';
+  var n=Number(read(raw,['cod_status','status_codigo','codigo_status']));
+  if(codeStatus[n])return codeStatus[n];
+  var s=normalize(read(raw,['status_servico','status_os','status','fase']));
+  if(s.includes('ENGENH'))return 'ENGENHARIA';
+  if(s.includes('PCP'))return 'PCP';
+  if(s.includes('COMPRA'))return 'COMPRAS';
+  if(s.includes('PRODU'))return 'PRODUÇÃO';
+  if(s.includes('QUALI'))return 'QUALIDADE';
+  if(s.includes('FATUR'))return 'FATURAMENTO';
+  if(s.includes('EXPED'))return 'EXPEDIÇÃO';
+  if(s.includes('CONCLU'))return 'CONCLUÍDO';
+  if(s.includes('PARALIS'))return 'PARALISADO';
+  if(s.includes('CANCEL'))return 'CANCELADO';
+  return 'SEM STATUS'
+}
 function normalizeItem(raw,i){var status=statusOf(raw),os=String(read(raw,['n_os','os','numero_os','ordem_servico'])||'').trim();
 var quote=String(read(raw,['n_orcamento','orcamento','numero_orcamento'])||'').trim(),invoice=String(read(raw,['numero_nf','n_nf','nf','nota_fiscal'])||'').trim();
 var agreed=date(read(raw,['previsao_acordada','entrega_acordada','dt_prevista','prazo_acordado','dt_previsao_entrega','data_entrega','prazo_entrega']));
 var forecast=date(read(raw,['u_prev_lib','previsao_liberacao','dt_prev_lib','dt_liberacao','prev_liberacao','previsao_de_liberacao']));
 var entry=date(read(raw,['dt_entrada','dt_aprovacao','entrada_pv','data_entrada','dt_orcamento']));
-var isDone=status==='CONCLUÍDO'||status==='CANCELADO'||!!truthy(read(raw,['concluido','cancelado']));
+var isDone=['CONCLUÍDO','FATURADO','CANCELADO'].includes(status)||truthy(read(raw,['concluido','cancelado','os_concluida']));
 var hasNF=invoice!==''&&invoice!=='0',noOS=!os||os==='0';
 var situation=String(read(raw,['situacao','situacao_prazo'])||'').trim(),urgent=false;
-if(!isDone&&noOS&&quote&&!hasNF){situation='ORÇAMENTO SEM OS';urgent=true}
-else if(!isDone&&((agreed&&agreed<=TODAY)||(forecast&&forecast<=TODAY))){situation='PRAZO VENCIDO / VERIFICAR';urgent=true}
-else if(!isDone&&agreed&&forecast&&forecast>agreed){situation='PREVISÃO ACIMA DO ACORDADO';urgent=true}
-else if(!situation){situation=isDone?'ENCERRADO':'DENTRO DO PROGRAMADO'}
+if(status==='FATURADO')situation='Faturado';
+else if(status==='CONCLUÍDO')situation='Concluído';
+else if(!situation){
+  if(!isDone&&((agreed&&agreed<=TODAY)||(forecast&&forecast<=TODAY)))situation=noOS?'Sem OS — Atrasado':'Prazo vencido';
+  else if(!isDone&&noOS&&quote)situation='Aguardando OS';
+  else if(!isDone&&agreed&&forecast&&forecast>agreed)situation='Avisar ao comercial';
+  else situation=isDone?'Concluído':'Dentro do programado'
+}
+var situacaoNormalizada=normalize(situation);
+urgent=!isDone&&(situacaoNormalizada.includes('ATRASAD')||situacaoNormalizada.includes('VENCID')||situacaoNormalizada.includes('AVISAR AO COMERCIAL')||situacaoNormalizada.includes('PREVISAO ACIMA DO ACORDADO'));
 var id=String(read(raw,['guid_linha','id','codigo_item','cod_os','codigo'])||'')+'|'+os+'|'+quote+'|'+i;
 return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:String(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
 function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus))})}
@@ -364,7 +391,7 @@ function setupFilters(){var vis=visibleRows();setSelect('typeFilter',vis.map(fun
 
 function badge(s,kind){return '<span class="tag '+(kind||'')+'">'+esc(s)+'</span>'}
 function group(s){
- s=normalize(s);if(s.includes('CONCLU'))return 'done';
+ s=normalize(s);if(s.includes('CONCLU')||s==='FATURADO')return 'done';
  if(s.includes('FATUR')||s.includes('EXPED'))return 'invoice';
  if(s.includes('QUALI'))return 'qa';if(s.includes('COMPRA'))return 'buy';
  if(s.includes('PCP')||s.includes('ENGENH'))return 'plan';
@@ -530,7 +557,7 @@ function drawKanban(arr){
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
    '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong>'+
-   '<span class="drag-handle '+(r.pending&&!canAdjustPending(r)?'disabled':'')+'" title="'+(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui')+'" role="button" aria-label="Arrastar OS" draggable="'+(r.pending&&!canAdjustPending(r)?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
+   '<span class="drag-handle '+((r.status==='FATURADO'||r.status==='SEM OS'||(r.pending&&!canAdjustPending(r)))?'disabled':'')+'" title="'+(['FATURADO','SEM OS'].includes(r.status)?'Status calculado, não permite movimentação':(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui'))+'" role="button" aria-label="Arrastar OS" draggable="'+((['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r)))?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
    '<div class="meta"><span>'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+
    (r.pending?'<span class="pending-badge">⏳ '+esc(r.previousStatus)+' → '+esc(r.status)+' • Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
    (r.urgent?badge(r.situation,'bad'):'')+'</div>'
@@ -762,7 +789,7 @@ async function saveModal(){
 window.saveModal=saveModal;
 function closeModal(){$('overlay').classList.remove('show');selected=null}window.closeModal=closeModal;
 function canAdjustPending(r){return !!(r&&r.pending&&r.pendingInfo&&r.pendingInfo.id&&profile&&(profile.gestor||normalize(r.pendingInfo.usuario)===normalize(profile.name)))}
-function dragStart(e,id){var r=rows.find(function(x){return x.id===id});if(!r||(r.pending&&!canAdjustPending(r))){e.preventDefault();return}dragging=id;e.stopPropagation();e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';var card=e.currentTarget.closest('.mini-card');if(card)card.classList.add('dragging')}window.dragStart=dragStart;
+function dragStart(e,id){var r=rows.find(function(x){return x.id===id});if(!r||['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r))){e.preventDefault();return}dragging=id;e.stopPropagation();e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';var card=e.currentTarget.closest('.mini-card');if(card)card.classList.add('dragging')}window.dragStart=dragStart;
 function dragEnd(){dragging=null;document.querySelectorAll('.drop-target,.dragging').forEach(function(x){x.classList.remove('drop-target','dragging')})}window.dragEnd=dragEnd;
 function allowDrop(e){e.preventDefault();e.currentTarget.classList.add('drop-target')}window.allowDrop=allowDrop;
 function dragLeave(e){e.currentTarget.classList.remove('drop-target')}window.dragLeave=dragLeave;
@@ -800,7 +827,7 @@ async function dropOn(e,to){
  var id=(e.dataTransfer&&e.dataTransfer.getData('text/plain'))||dragging;
  dragEnd();
  var r=rows.find(function(x){return x.id===id});
- if(!r||r.status===to)return;
+ if(!r||r.status===to||['FATURADO','SEM OS'].includes(r.status)||['FATURADO','SEM OS'].includes(to))return;
  if(r.pending){await adjustPending(r,to);return}
  if(!profile.gestor&&!profile.roles.includes(r.status))return;
  if(!confirm('Mover '+(r.os||r.quote)+' de '+r.status+' para '+to+'?\\n\\nAguardará aprovação do gestor.'))return;
