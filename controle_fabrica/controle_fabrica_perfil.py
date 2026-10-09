@@ -53,3 +53,58 @@ def consultar_perfil(response: Response, usuario: str = Depends(obter_usuario_lo
 # U_GESTOR pode acessar tudo. Outros só recebem registros com COD_STATUS
 # permitido por seus U_*, sem permitir que o usuário passe "perfil" pela URL.
 # Nunca efetivar a alteração de status no POST de solicitação.
+
+# Fonte de dados do controle, protegida no servidor.
+# Não depende de o frontend escolher sua própria permissão.
+from pathlib import Path
+from fastapi.encoders import jsonable_encoder
+
+STATUS_POR_PERMISSAO = {
+    "U_ENG": 6, "U_PCP": 7, "U_COMPRAS": 8, "U_PROD": 9,
+    "U_CQ": 10, "U_FAT": 11, "U_EXP": 12,
+}
+CODIGOS_POR_TEXTO = {
+    "ENGENHARIA": 6, "PCP": 7, "COMPRAS": 8, "PRODUÇÃO": 9,
+    "PRODUCAO": 9, "QUALIDADE": 10, "FATURAMENTO": 11,
+    "EXPEDIÇÃO": 12, "EXPEDICAO": 12, "CONCLUÍDO": 13,
+    "CONCLUIDO": 13, "PARALISADO": 14, "CANCELADO": 15,
+}
+
+def _codigo_status(linha: dict):
+    campos = {str(k).lower(): v for k, v in linha.items()}
+    bruto = campos.get("cod_status")
+    if bruto is not None:
+        try:
+            return int(bruto)
+        except (ValueError, TypeError):
+            pass
+    status = str(campos.get("status_servico") or campos.get("status") or "").strip().upper()
+    return CODIGOS_POR_TEXTO.get(status)
+
+def _consulta_sql():
+    pasta = Path(os.getenv("SQL_DIR") or (Path(__file__).resolve().parent / "sql"))
+    if not pasta.is_dir():
+        raise HTTPException(status_code=503, detail=f"Pasta SQL não encontrada: {pasta}")
+    for arquivo in pasta.iterdir():
+        if arquivo.is_file() and arquivo.suffix.lower() == ".sql" and arquivo.stem.lower() == "controle_fabrica":
+            return arquivo.read_text(encoding="utf-8-sig")
+    raise HTTPException(status_code=503, detail="controle_fabrica.sql não localizado na pasta SQL")
+
+@router.get("/dados")
+def consultar_dados(response: Response, usuario: str = Depends(obter_usuario_logado)):
+    perfil = permissoes_do_usuario(usuario)
+    permitidos = {codigo for campo, codigo in STATUS_POR_PERMISSAO.items() if perfil[campo]}
+    conn = get_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(_consulta_sql())
+        colunas = [d[0] for d in cursor.description]
+        linhas = (dict(zip(colunas, v)) for v in cursor.fetchall())
+        dados = list(linhas) if perfil["U_GESTOR"] else [
+            linha for linha in linhas if _codigo_status(linha) in permitidos
+        ]
+        cursor.close()
+    finally:
+        conn.close()
+    response.headers["Cache-Control"] = "no-store, private"
+    return jsonable_encoder({"dados": dados, "total": len(dados)})
