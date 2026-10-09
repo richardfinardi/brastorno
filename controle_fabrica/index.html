@@ -76,6 +76,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <section class="hero"><div><div class="eyebrow">Gestão industrial • ERP CPS</div><h1>Controle de Fábrica</h1>
 <div class="subtitle">Quatro visões conectadas para acompanhar carteira, programação, andamento, responsabilidades e faturamento.</div></div><div class="subtitle updated-block"><div id="updated">Carregando dados</div><span id="cacheState" class="cache-state loading">Conectando…</span></div></section>
 <div id="notice" class="notice">Validando o acesso ao Controle de Fábrica…</div>
+<div class="callout"><strong>✓ Integrado ao CPS</strong><span>Esta é a versão operacional da demonstração, com as quatro visões conectadas aos dados reais. As alterações de status pelo Kanban passam pela aprovação do gestor antes de serem efetivadas no ERP.</span></div>
 <nav class="tabs hidden" id="tabs" aria-label="Telas do controle">
 <button class="tab active" id="tab-fabric" onclick="changeView('fabric')"><em>A.</em> Gestão de Fábrica</button>
 <button class="tab" id="tab-status" onclick="changeView('status')"><em>B.</em> Gestão por Status</button>
@@ -93,7 +94,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <div class="field" style="flex:2"><label>Contém</label><input id="columnValue" placeholder="Texto a localizar"></div>
 <button class="btn primary" onclick="addColumnFilter()">Adicionar</button></div><div class="chips" id="chips"></div></section>
 <main id="screen"><div class="skel">Conectando à API…</div></main>
-<div class="footerinfo">BRASTORNO • Integração de leitura em tempo real. Movimentações no Kanban exigem aprovação e confirmação do ERP. A área de demonstração permanece independente.</div>
+<footer class="footnote">BRASTORNO • Dados integrados ao ERP CPS. Movimentações no Kanban exigem aprovação. A demonstração permanece independente.</footer>
 </div>
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
 <div class="modal" role="dialog" aria-modal="true"><div class="modalhead"><h2 id="modalTitle">Detalhes do item</h2><button class="btn small" onclick="closeModal()">Fechar ✕</button></div>
