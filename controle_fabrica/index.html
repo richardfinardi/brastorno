@@ -179,6 +179,12 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .field-help{display:block;color:#70819a;font-size:11px;margin-top:4px}
 .card-undo{margin-top:7px;border:1px solid #e0c98c;background:#fff8e8;color:#765412;border-radius:7px;padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer;display:block;width:100%;text-align:center}
 .card-undo:hover{background:#fff0bf}
+
+/* Intervalo de previsão de liberação no filtro global, compartilhado por todas as abas */
+.date-range-filter{display:flex;align-items:flex-end;gap:8px;flex-wrap:nowrap;flex:0 1 auto}
+.date-range-filter .field{min-width:0;width:148px}
+.date-range-filter input[type=date]{font-size:12px;padding:0 7px;min-width:0}
+@media(max-width:700px){.date-range-filter{flex:1 1 100%;gap:10px}.date-range-filter .field{flex:1 1 0;width:auto}.date-range-filter input[type=date]{width:100%}}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -200,7 +206,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <div id="filtersBody"><div class="filters"><div class="field search"><label>Pesquisa geral dinâmica</label><input id="q" placeholder="OS, cliente, produto, orçamento, NF, observação…"></div>
 <div class="field"><label>Tipo</label><select id="typeFilter"><option value="">Todos</option></select></div>
 <div class="field"><label>Status</label><select id="statusFilter"><option value="">Todos</option></select></div>
-<div class="field"><label>Previsão</label><select id="periodFilter"><option value="">Todos</option><option value="late">Vencidos / urgentes</option><option value="soon">Próximos 30 dias</option><option value="noos">Orçamentos sem OS</option><option value="closed">Concluídos</option></select></div></div>
+<div class="field"><label for="periodFilter">Previsão</label><select id="periodFilter"><option value="">Todos</option><option value="late">Vencidos / urgentes</option><option value="soon">Próximos 30 dias</option><option value="noos">Orçamentos sem OS</option><option value="closed">Concluídos</option></select></div><div class="date-range-filter" role="group" aria-label="Previsão de liberação entre datas"><div class="field"><label for="releaseFrom">LIBERAÇÃO • DE</label><input type="date" id="releaseFrom" aria-label="Previsão de liberação de" title="Previsão de liberação a partir desta data (inclusive)"></div><div class="field"><label for="releaseTo">ATÉ</label><input type="date" id="releaseTo" aria-label="Previsão de liberação até" title="Previsão de liberação até esta data (inclusive)"></div></div></div>
 <div class="search-help">Dica: use <b>+britador -concluído</b> para incluir "britador" e excluir "concluído". Os filtros por coluna podem ser combinados.</div><div class="filter-box hidden" id="advanced"><div class="field"><label>Coluna</label><select id="columnSelect"></select></div>
 <div class="field" style="flex:2"><label>Contém</label><input id="columnValue" placeholder="Texto a localizar"></div>
 <button class="btn primary" onclick="addColumnFilter()">Adicionar</button></div><div class="chips" id="chips"></div></div></section>
@@ -344,10 +350,12 @@ else if(!situation){situation=isDone?'ENCERRADO':'DENTRO DO PROGRAMADO'}
 var id=String(read(raw,['guid_linha','id','codigo_item','cod_os','codigo'])||'')+'|'+os+'|'+quote+'|'+i;
 return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:String(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
 function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus))})}
-function filtered(exceptKey){var q=normalize($('q').value),type=$('typeFilter').value,status=$('statusFilter').value,per=$('periodFilter').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
+function filtered(exceptKey){var q=normalize($('q').value),type=$('typeFilter').value,status=$('statusFilter').value,per=$('periodFilter').value,releaseFrom=$('releaseFrom').value,releaseTo=$('releaseTo').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
 return visibleRows().filter(function(r){if(type&&r.type!==type)return false;if(status&&r.status!==status)return false;
 if(per==='late'&&!r.urgent)return false;if(per==='noos'&&!r.noOS)return false;if(per==='closed'&&!r.done)return false;
 if(per==='soon'&&!(r.forecast>=TODAY&&r.forecast<=new Date(Date.now()+30*86400000).toISOString().slice(0,10)))return false;
+if(releaseFrom&&(!r.forecast||r.forecast<releaseFrom))return false;
+if(releaseTo&&(!r.forecast||r.forecast>releaseTo))return false;
 var hay=q?normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JSON.stringify(r.raw)):'';
 if(tokens.some(function(t){var exclude=t[0]==='-';var term=normalize(t.replace(/^[+-]/,'').replace(/^"|"$/g,''));return term&&(exclude?hay.includes(term):!hay.includes(term))}))return false;
 return extraFilters.every(function(f){if(f.k===exceptKey)return true;var val=String(r[f.k]==null?'':r[f.k]);if(Array.isArray(f.values))return f.values.includes(val);if(['entry','agreed','forecast','invoicedAt'].includes(f.k))val+=' '+human(r[f.k]);if(f.k==='value')val+=' '+money(r.value);return normalize(val).includes(normalize(f.v))})})}
@@ -595,7 +603,7 @@ function sortBy(k){if(sortKey===k)sortAsc=!sortAsc;else {sortKey=k;sortAsc=true}
 function advancedToggle(){$('advanced').classList.toggle('open')}window.advancedToggle=advancedToggle;
 function addColumnFilter(){var v=$('columnValue').value.trim();if(v){extraFilters.push({k:$('columnSelect').value,v:v});$('columnValue').value='';render()}}window.addColumnFilter=addColumnFilter;
 function removeFilter(i){extraFilters.splice(i,1);render()}window.removeFilter=removeFilter;
-function clearFilters(){closeExcelFilter();$('q').value='';$('typeFilter').value='';$('statusFilter').value='';$('periodFilter').value='';extraFilters=[];pageIndex=1;render()}window.clearFilters=clearFilters;
+function clearFilters(){closeExcelFilter();$('q').value='';$('typeFilter').value='';$('statusFilter').value='';$('periodFilter').value='';$('releaseFrom').value='';$('releaseTo').value='';extraFilters=[];pageIndex=1;render()}window.clearFilters=clearFilters;
 function toggleFilters(force){
  if(typeof force==='boolean')filtersCollapsed=force;else filtersCollapsed=!filtersCollapsed;
  var b=$('filtersBody');if(b)b.classList.toggle('hidden',filtersCollapsed);
@@ -934,7 +942,7 @@ function refreshWhenActive(){
 setInterval(refreshWhenActive,180000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden)refreshWhenActive()});
 window.addEventListener('focus',refreshWhenActive);
-['q','typeFilter','statusFilter','periodFilter'].forEach(function(id){$(id).addEventListener('input',function(){pageIndex=1;render()})});
+['q','typeFilter','statusFilter','periodFilter','releaseFrom','releaseTo'].forEach(function(id){$(id).addEventListener('input',function(){pageIndex=1;rolesLimit=100;render()})});
 $('columnValue').addEventListener('keydown',function(e){if(e.key==='Enter')addColumnFilter()});document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()});
 try{toggleFilters(localStorage.getItem('brastorno_filtros_recolhidos')==='1')}catch(e){}
 loadAll();
