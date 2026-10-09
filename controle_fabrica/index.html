@@ -113,7 +113,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 @media(max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.edit-section .cols{grid-template-columns:1fr}.updated-block{display:none}}
 
 /* Grade Excel: largura travada, strings longas sempre contidas na célula */
-.grid-table{table-layout:fixed;width:2675px;min-width:2675px;border-spacing:0}
+.grid-table{table-layout:fixed;width:2455px;min-width:2455px;border-spacing:0}
 .grid-table td,.grid-table th{max-width:unset;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .grid-table td.desc{white-space:nowrap;max-width:unset;min-width:0}
 .grid-table .clip-cell{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -460,8 +460,8 @@ function renderExcelValues(){
  $('excelSummary').textContent=excelSelected.size+' selecionados • '+(match.length>180?'mostrando 180 de '+match.length+' (refine a pesquisa)':'')
 }
 function excelSearchChange(v){excelSearch=v;renderExcelValues()}window.excelSearchChange=excelSearchChange;
-function excelToggleOne(el){if(el.checked)excelSelected.add(el.dataset.v);else excelSelected.delete(el.dataset.v);renderExcelValues()}window.excelToggleOne=excelToggleOne;
-function excelToggleAll(yes){excelMatches().forEach(function(x){if(yes)excelSelected.add(x);else excelSelected.delete(x)});renderExcelValues()}window.excelToggleAll=excelToggleAll;
+function excelToggleOne(el){var list=$('excelOptions'),y=list?list.scrollTop:0;if(el.checked)excelSelected.add(el.dataset.v);else excelSelected.delete(el.dataset.v);renderExcelValues();if(list)list.scrollTop=y}window.excelToggleOne=excelToggleOne;
+function excelToggleAll(yes){var list=$('excelOptions'),y=list?list.scrollTop:0;excelMatches().forEach(function(x){if(yes)excelSelected.add(x);else excelSelected.delete(x)});renderExcelValues();if(list)list.scrollTop=y}window.excelToggleAll=excelToggleAll;
 function excelApply(){
  extraFilters=extraFilters.filter(function(x){return x.k!==excelKey});
  if(excelSelected.size!==excelValues.length)extraFilters.push({k:excelKey,values:Array.from(excelSelected)});
@@ -659,9 +659,9 @@ async function saveModal(){
  var newType=($('editType').value==='__NEW__'?$('editNewType').value:$('editType').value).trim(),newDate=$('editForecast').value||null,
  note=$('editObservation').value.trim();
  var oldType=r.type==='—'?'':r.type;
- if(!newType){alert('Informe o tipo do serviço.');$('editType').focus();return}
+ if($('editType').value==='__NEW__'&&!newType){alert('Digite o novo tipo.');$('editNewType').focus();return}
  var changes=[];
- if(newType!==oldType)changes.push(['tipo',{classificacao:newType},'PATCH','type']);
+ if(newType&&newType!==oldType)changes.push(['tipo',{classificacao:newType},'PATCH','type']);
  if((newDate||'')!==(r.forecast||''))changes.push(['previsao',{u_prev_lib:newDate},'PATCH','forecast']);
  if(note)changes.push(['observacoes',{texto:note},'POST','note']);
  if(!changes.length){closeModal();return}
