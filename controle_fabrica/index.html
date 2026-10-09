@@ -372,9 +372,86 @@ function toggleFilters(force){
 }window.toggleFilters=toggleFilters;
 function exportCSV(){var arr=filtered(),matrix=[FIELDS.map(function(f){return f[1]})].concat(arr.map(function(r){return FIELDS.map(function(f){return f[0]==='situation'?r.situation:r[f[0]]||''})}));var csv='\ufeff'+matrix.map(function(a){return a.map(function(x){return '"'+String(x).replace(/"/g,'""')+'"'}).join(';')}).join('\r\n');
 var a=document.createElement('a'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.href=url;a.download='brastorno_controle_fabrica.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url)},1000)}window.exportCSV=exportCSV;
-function openModal(id){var r=rows.find(function(x){return x.id===id});if(!r)return;selected=r;$('modalTitle').textContent=(r.os||r.quote||'Item')+' • Controle de Fábrica';
-$('modalBody').innerHTML='<div class="cols">'+FIELDS.map(function(f){return '<div class="kv"><small>'+esc(f[1])+'</small><strong>'+(f[0]==='status'||f[0]==='situation'?cell(r,f[0]):esc((f[0]==='value')?money(r.value):(['entry','agreed','forecast','invoicedAt'].includes(f[0])?human(r[f[0]]):r[f[0]]||'—')))+'</strong></div>'}).join('')+'</div><div class="notice warn" style="margin-top:15px">Status, observações e datas são provenientes do ERP. Nesta etapa, o detalhamento não grava alterações diretamente no CPS.</div>';
-$('overlay').classList.add('show')}window.openModal=openModal;
+
+function osCode(r){
+ if(!r||!r.raw)return null;
+ var val=read(r.raw,['cod_os','codigo_os','codigo_tos']);
+ return val!==''&&val!==null&&val!==undefined&&!isNaN(Number(val))?Number(val):null
+}
+function openModal(id,focusField){
+ var r=rows.find(function(x){return x.id===id});if(!r)return;
+ selected=r;
+ $('modalTitle').textContent=(r.os||r.quote||'Item')+' • Detalhes';
+ var canEdit=!!(profile&&profile.gestor&&osCode(r));
+ var details=FIELDS.filter(function(f){return !['obs','month','year','type','forecast'].includes(f[0])});
+ var values='<div class="cols">'+details.map(function(f){
+  var val=f[0]==='status'||f[0]==='situation'?cell(r,f[0]):esc(f[0]==='value'?money(r.value):['entry','agreed','invoicedAt'].includes(f[0])?human(r[f[0]]):r[f[0]]||'—');
+  return '<div class="kv"><small>'+esc(f[1])+'</small><strong>'+val+'</strong></div>'
+ }).join('')+'</div>';
+ var logs='<div class="edit-section"><h3>Histórico / Observações</h3><div class="log-preview">'+esc(r.obs||'Nenhuma observação registrada.')+'</div></div>';
+ var edit='';
+ if(canEdit){
+   var choices=Array.from(new Set(baseRows.map(function(x){return String(x.type||'').trim()}).filter(function(x){return x&&x!=='—'}))).sort(function(a,b){return a.localeCompare(b,'pt-BR')});
+   edit='<div class="edit-section"><h3>Alterar serviço</h3>'+
+   '<div class="cols">'+
+   '<div class="field"><label for="editType">Tipo / Classificação</label><input id="editType" list="typeOptions" maxlength="120" value="'+esc(r.type==='—'?'':r.type)+'" placeholder="Selecione ou digite um novo tipo"><datalist id="typeOptions">'+choices.map(function(c){return '<option value="'+esc(c)+'">'}).join('')+'</datalist></div>'+
+   '<div class="field"><label for="editForecast">Previsão de liberação</label><input id="editForecast" type="date" value="'+esc(r.forecast||'')+'"></div></div>'+
+   '<div class="field" style="margin-top:12px"><label for="editObservation">Nova observação</label><textarea id="editObservation" maxlength="10000" placeholder="Adicionar ao histórico sem apagar as observações anteriores"></textarea></div>'+
+   '<small style="display:block;margin-top:8px;color:#738198">Cada alteração é registrada com usuário, data e hora.</small>'+
+   '</div>';
+ }
+ $('modalBody').innerHTML=values+edit+logs;
+ $('btnSaveModal').classList.toggle('hidden',!canEdit);
+ $('overlay').classList.add('show');
+ if(focusField&&canEdit){var target=$(focusField==='type'?'editType':'editForecast');if(target)target.focus()}
+}window.openModal=openModal;
+function rawPatch(raw,aliases,value){
+ var copy=Object.assign({},raw),names=aliases.map(function(k){return normalize(k).replace(/[^A-Z0-9]/g,'')});
+ var original=Object.keys(copy).find(function(k){return names.includes(normalize(k).replace(/[^A-Z0-9]/g,''))});
+ copy[original||aliases[0]]=value;return copy
+}
+function patchLocalOS(cod,patch){
+ baseRows=baseRows.map(function(item,i){
+  if(osCode(item)!==cod)return item;
+  var raw=item.raw;
+  if(Object.prototype.hasOwnProperty.call(patch,'type'))raw=rawPatch(raw,['classificacao','tipo'],patch.type);
+  if(Object.prototype.hasOwnProperty.call(patch,'forecast'))raw=rawPatch(raw,['u_prev_lib','previsao_liberacao'],patch.forecast);
+  if(Object.prototype.hasOwnProperty.call(patch,'obs'))raw=rawPatch(raw,['obs','obs_texto_limpo','observacao'],patch.obs);
+  return normalizeItem(raw,i)
+ });
+ applyPendingVisuals();
+ render();
+ if(cacheKey)saveSnapshot(cacheKey,baseRows.map(function(item){return item.raw}),Date.now()).catch(function(){})
+}
+async function saveModal(){
+ var r=selected,code=osCode(r);
+ if(!r||!profile||!profile.gestor||!code)return;
+ var newType=$('editType').value.trim(),newDate=$('editForecast').value||null,
+ note=$('editObservation').value.trim();
+ var oldType=r.type==='—'?'':r.type;
+ if(!newType){alert('Informe o tipo do serviço.');$('editType').focus();return}
+ var changes=[];
+ if(newType!==oldType)changes.push(['tipo',{classificacao:newType},'PATCH','type']);
+ if((newDate||'')!==(r.forecast||''))changes.push(['previsao',{u_prev_lib:newDate},'PATCH','forecast']);
+ if(note)changes.push(['observacoes',{texto:note},'POST','note']);
+ if(!changes.length){closeModal();return}
+ var btn=$('btnSaveModal');btn.disabled=true;btn.textContent='Salvando…';
+ try{
+  for(var i=0;i<changes.length;i++){
+   var c=changes[i],response=await api('/controle_fabrica/os/'+code+'/'+c[0],{method:c[2],headers:{'Content-Type':'application/json'},body:JSON.stringify(c[1])});
+   var patch={};
+   if(c[3]==='type')patch.type=newType;
+   if(c[3]==='forecast')patch.forecast=newDate||'';
+   if(response&&typeof response.obs==='string')patch.obs=response.obs;
+   patchLocalOS(code,patch)
+  }
+  closeModal();
+  setNotice('Alteração salva com registro no histórico.','ok');
+  // Atualização silenciosa posterior, sem bloquear a tela do usuário.
+  setTimeout(function(){loadData({force:true})},1400)
+ }catch(err){setNotice('Não foi possível salvar: '+err.message,'error')}
+ finally{btn.disabled=false;btn.textContent='Salvar alterações'}
+}window.saveModal=saveModal;
 function closeModal(){$('overlay').classList.remove('show');selected=null}window.closeModal=closeModal;
 function dragStart(e,id){dragging=id;e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';e.currentTarget.classList.add('dragging')}window.dragStart=dragStart;
 function dragEnd(){dragging=null;document.querySelectorAll('.drop-target,.dragging').forEach(function(x){x.classList.remove('drop-target','dragging')})}window.dragEnd=dragEnd;
