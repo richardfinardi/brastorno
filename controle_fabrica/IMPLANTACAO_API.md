@@ -12,13 +12,14 @@ from controle_fabrica_perfil import router as controle_fabrica_router
 app.include_router(controle_fabrica_router)
 ```
 
-3. Reiniciar o serviço e confirmar `GET /controle_fabrica/perfil` com header `Authorization: Bearer <token>`. Sem esse endpoint o frontend **bloqueia a carga de dados**, para não presumir permissões.
+3. Reiniciar o serviço e confirmar `GET /controle_fabrica/perfil` e `GET /controle_fabrica/dados` com header `Authorization: Bearer <token>`. O frontend só utiliza **/controle_fabrica/dados**, filtrado pelo servidor. Sem essas rotas, não carrega dados.
+4. Garantir que o arquivo `controle_fabrica.sql` esteja na pasta `sql/` ao lado da API; alternativamente configurar `SQL_DIR` para apontar para a pasta SQL. A busca ignora diferenças entre maiúsculas e minúsculas.
 
 As permissões são lidas da tabela `CSENHA`, empresa 1: `U_GESTOR, U_ENG, U_PCP, U_COMPRAS, U_PROD, U_CQ, U_FAT, U_EXP`.
 
 ## IMPORTANTE: segurança do endpoint de dados
 
-**Não basta esconder abas no navegador.** A própria rota automática `GET /controle_fabrica` também precisa receber/validar o Bearer e filtrar, *no servidor*, as linhas conforme `COD_STATUS`. Para U_GESTOR, todos os registros. Para outros, apenas os status liberados. Ao habilitar as rotas de movimentação, validar novamente as permissões.
+**Não basta esconder abas no navegador.** A rota dedicada `GET /controle_fabrica/dados` já recebe/valida o Bearer e filtra, *no servidor*, as linhas conforme `COD_STATUS`. **Também proteja ou restrinja a rota automática `GET /controle_fabrica`** para impedir bypass direto da segurança; a aplicação nova não a utiliza. Para U_GESTOR, todos os registros. Para outros, apenas os status liberados. Ao habilitar as rotas de movimentação, validar novamente as permissões.
 
 | Perfil | Código permitido |
 | --- | --- |
