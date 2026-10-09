@@ -700,8 +700,6 @@ function patchLocalOS(cod,patch){
  render();
  if(cacheKey)saveSnapshot(cacheKey,baseRows.map(function(item){return item.raw}),Date.now()).catch(function(){})
 }
-async 
-
 function patchLocalOrc(guid,desc){
  baseRows=baseRows.map(function(item,i){
    if(orcamentoGuid(item)!==guid)return item;
