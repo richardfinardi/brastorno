@@ -537,10 +537,11 @@ function openModal(id,focusField){
  var logs='<div class="edit-section"><h3>Histórico / Observações</h3><div class="log-preview">'+esc(r.obs||'Nenhuma observação registrada.')+'</div></div>';
  var edit='';
  if(canEdit){
-   var choices=Array.from(new Set(baseRows.map(function(x){return String(x.type||'').trim()}).filter(function(x){return x&&x!=='—'}))).sort(function(a,b){return a.localeCompare(b,'pt-BR')});
+   var defaults=['Peças','Fabricação','Canaã - Fabricação','Peças de panela','Serviços'];
+   var choices=Array.from(new Set(defaults.concat(baseRows.map(function(x){return String(x.type||'').trim()}).filter(function(x){return x&&x!=='—'})).concat(r.type&&r.type!=='—'?[r.type]:[]))).sort(function(a,b){return a.localeCompare(b,'pt-BR')});
    edit='<div class="edit-section"><h3>Alterar serviço</h3>'+
    '<div class="cols">'+
-   '<div class="field"><label for="editType">Tipo / Classificação</label><input id="editType" list="typeOptions" maxlength="120" value="'+esc(r.type==='—'?'':r.type)+'" placeholder="Selecione ou digite um novo tipo"><datalist id="typeOptions">'+choices.map(function(c){return '<option value="'+esc(c)+'">'}).join('')+'</datalist></div>'+
+   '<div class="field"><label for="editType">Tipo / Classificação</label><select id="editType" onchange="editTypeChanged(this.value)"><option value="">Selecione o tipo...</option>'+choices.map(function(c){return '<option value="'+esc(c)+'"'+(c===r.type?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'<option value="__NEW__">+ Cadastrar novo tipo...</option></select><input id="editNewType" class="hidden" maxlength="120" style="margin-top:8px" placeholder="Digite o novo tipo" aria-label="Novo tipo"></div>'+
    '<div class="field"><label for="editForecast">Previsão de liberação</label><input id="editForecast" type="date" value="'+esc(r.forecast||'')+'"></div></div>'+
    '<div class="field" style="margin-top:12px"><label for="editObservation">Nova observação</label><textarea id="editObservation" maxlength="10000" placeholder="Adicionar ao histórico sem apagar as observações anteriores"></textarea></div>'+
    '<small style="display:block;margin-top:8px;color:#738198">Cada alteração é registrada com usuário, data e hora.</small>'+
@@ -550,7 +551,9 @@ function openModal(id,focusField){
  $('btnSaveModal').classList.toggle('hidden',!canEdit);
  $('overlay').classList.add('show');
  if(focusField&&canEdit){var target=$(focusField==='type'?'editType':'editForecast');if(target)target.focus()}
-}window.openModal=openModal;
+ }window.openModal=openModal;
+function editTypeChanged(v){var input=$('editNewType');if(input){input.classList.toggle('hidden',v!=='__NEW__');if(v==='__NEW__')input.focus()}}
+window.editTypeChanged=editTypeChanged;
 function rawPatch(raw,aliases,value){
  var copy=Object.assign({},raw),names=aliases.map(function(k){return normalize(k).replace(/[^A-Z0-9]/g,'')});
  var original=Object.keys(copy).find(function(k){return names.includes(normalize(k).replace(/[^A-Z0-9]/g,''))});
@@ -572,7 +575,7 @@ function patchLocalOS(cod,patch){
 async function saveModal(){
  var r=selected,code=osCode(r);
  if(!r||!profile||!profile.gestor||!code)return;
- var newType=$('editType').value.trim(),newDate=$('editForecast').value||null,
+ var newType=($('editType').value==='__NEW__'?$('editNewType').value:$('editType').value).trim(),newDate=$('editForecast').value||null,
  note=$('editObservation').value.trim();
  var oldType=r.type==='—'?'':r.type;
  if(!newType){alert('Informe o tipo do serviço.');$('editType').focus();return}
