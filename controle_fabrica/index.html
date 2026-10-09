@@ -335,37 +335,42 @@ function applyRows(raw,stamp,fromCache){
 function parseProfile(p){var src=(p&&p.permissoes)||p&&p.permissions||p||{};var gestor=truthy(read(src,['U_GESTOR','gestor']));var roles=STATUS.filter(function(s){return PERMS[s]&&truthy(read(src,[PERMS[s]]))});return {gestor:gestor,roles:roles,name:read(p,['usuario','nome','username'])||localStorage.getItem('brastorno_usuario_nome')||'USUÁRIO'}}
 function flattenResult(v){if(Array.isArray(v))return v;if(!v||typeof v!=='object')return [];for(var i=0;i<['dados','data','resultado','resultados','itens','items','rows','registros','records'].length;i++){var x=read(v,[['dados','data','resultado','resultados','itens','items','rows','registros','records'][i]]);if(Array.isArray(x))return x;if(x&&typeof x==='object'){var y=flattenResult(x);if(y.length)return y}}return []}
 function statusOf(raw){
-  // O SQL só marca FATURADO após confirmar 100% da quantidade faturada.
-  // O status comercial calculado prevalece apenas na visualização, sem alterar o CPS.
-  var situacao=normalize(read(raw,['situacao','situacao_prazo']));
-  var origem=normalize(read(raw,['status','status_calculado']));
-  if(situacao==='FATURADO'||origem==='FATURADO'||truthy(read(raw,['faturado_total'])))return 'FATURADO';
-  if(origem==='SEM OS')return 'SEM OS';
-  var n=Number(read(raw,['cod_status','status_codigo','codigo_status']));
-  if(codeStatus[n])return codeStatus[n];
-  var s=normalize(read(raw,['status_servico','status_os','status','fase']));
-  if(s.includes('ENGENH'))return 'ENGENHARIA';
-  if(s.includes('PCP'))return 'PCP';
-  if(s.includes('COMPRA'))return 'COMPRAS';
-  if(s.includes('PRODU'))return 'PRODUÇÃO';
-  if(s.includes('QUALI'))return 'QUALIDADE';
-  if(s.includes('FATUR'))return 'FATURAMENTO';
-  if(s.includes('EXPED'))return 'EXPEDIÇÃO';
-  if(s.includes('CONCLU'))return 'CONCLUÍDO';
-  if(s.includes('PARALIS'))return 'PARALISADO';
-  if(s.includes('CANCEL'))return 'CANCELADO';
-  return 'SEM STATUS'
+ // Prioridade: faturado integral > concluído com orçamento > concluído sem orçamento > CPS.
+ var situacao=normalize(read(raw,['situacao','situacao_prazo']));
+ var origem=normalize(read(raw,['status','status_calculado']));
+ var orcamento=String(read(raw,['orcamento','n_orcamento','numero_orcamento'])||'').trim();
+ var comOrcamento=!!orcamento&&orcamento!=='0';
+ var n=Number(read(raw,['cod_status','status_codigo','codigo_status']));
+ var posicao=normalize(read(raw,['prosicao','posicao']));
+ var concluida=n===13||origem==='CONCLUIDO'||situacao==='CONCLUIDO'||posicao==='CONCLUIDO'||truthy(read(raw,['os_concluida','concluido']));
+ if(situacao==='FATURADO'||origem==='FATURADO'||truthy(read(raw,['faturado_total'])))return 'FATURADO';
+ if(origem==='SEM OS')return 'SEM OS';
+ if(concluida&&comOrcamento)return 'FATURAMENTO';
+ if(concluida)return 'CONCLUÍDO';
+ if(codeStatus[n])return codeStatus[n];
+ var x=origem||normalize(read(raw,['status_servico','status_os','fase']));
+ if(x.includes('ENGENH'))return 'ENGENHARIA';
+ if(x.includes('PCP'))return 'PCP';
+ if(x.includes('COMPRA'))return 'COMPRAS';
+ if(x.includes('PRODU'))return 'PRODUÇÃO';
+ if(x.includes('QUALI'))return 'QUALIDADE';
+ if(x.includes('FATUR'))return 'FATURAMENTO';
+ if(x.includes('EXPED'))return 'EXPEDIÇÃO';
+ if(x.includes('PARALIS'))return 'PARALISADO';
+ if(x.includes('CANCEL'))return 'CANCELADO';
+ return 'SEM STATUS'
 }
 function normalizeItem(raw,i){var status=statusOf(raw),os=String(read(raw,['n_os','os','numero_os','ordem_servico'])||'').trim();
 var quote=String(read(raw,['n_orcamento','orcamento','numero_orcamento'])||'').trim(),invoice=String(read(raw,['numero_nf','n_nf','nf','nota_fiscal'])||'').trim();
 var agreed=date(read(raw,['previsao_acordada','entrega_acordada','dt_prevista','prazo_acordado','dt_previsao_entrega','data_entrega','prazo_entrega']));
 var forecast=date(read(raw,['u_prev_lib','previsao_liberacao','dt_prev_lib','dt_liberacao','prev_liberacao','previsao_de_liberacao']));
 var entry=date(read(raw,['dt_entrada','dt_aprovacao','entrada_pv','data_entrada','dt_orcamento']));
-var isDone=['CONCLUÍDO','FATURADO','CANCELADO'].includes(status)||truthy(read(raw,['concluido','cancelado','os_concluida']));
+var isDone=['CONCLUÍDO','FATURADO','CANCELADO'].includes(status);
 var hasNF=invoice!==''&&invoice!=='0',noOS=!os||os==='0';
 var situation=String(read(raw,['situacao','situacao_prazo'])||'').trim(),urgent=false;
 if(status==='FATURADO')situation='Faturado';
 else if(status==='CONCLUÍDO')situation='Concluído';
+else if(status==='FATURAMENTO'&&(Number(read(raw,['cod_status']))===13||normalize(read(raw,['prosicao','posicao']))==='CONCLUIDO'||normalize(situation)==='AGUARDANDO FATURAMENTO'||truthy(read(raw,['os_concluida','concluido']))))situation='Aguardando faturamento';
 else if(!situation){
   if(!isDone&&((agreed&&agreed<=TODAY)||(forecast&&forecast<=TODAY)))situation=noOS?'Sem OS — Atrasado':'Prazo vencido';
   else if(!isDone&&noOS&&quote)situation='Aguardando OS';
@@ -397,7 +402,7 @@ function group(s){
  if(s.includes('PCP')||s.includes('ENGENH'))return 'plan';
  if(s.includes('PRODU'))return 'work';return 'other'
 }
-function label(s){return '<span class="pill '+group(s)+'">'+esc(s)+'</span>'}
+function label(s){return '<span class="pill '+group(s)+'">'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span>'}
 function metrics(arr){
  var active=arr.filter(function(r){return !r.done}),late=active.filter(function(r){return r.urgent});
  var k=[
@@ -564,7 +569,7 @@ function drawKanban(arr){
   }).join('');
   var extra=items.length>limit?'<button class="btn small" onclick="showMoreLane('+JSON.stringify(s).replace(/"/g,'&quot;')+')">Mostrar mais ('+(items.length-limit)+')</button>':'';
   return '<section class="lane" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropOn(event,'+JSON.stringify(s).replace(/"/g,'&quot;')+')">'+
-   '<div class="lane-head"><span>'+esc(s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
+   '<div class="lane-head"><span>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
    (cards||'<div class="empty">Sem cartões</div>')+extra+'</section>'
  }).join('');
  $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>D. Gestão visual em cartões</h2></div><span class="tag">'+arr.length+' cartões</span></div><div class="kanban">'+lanes+'</div></section>'
