@@ -239,7 +239,7 @@ async function loadPending(){
   // A fila é validada no servidor: não armazenar solicitações de terceiros no navegador.
   pendingRequests=items;
   applyPendingVisuals();
-  if(hasData)render();
+  if(hasData){setupFilters();render()}
  }catch(err){
   if(err.status!==404&&err.status!==405)console.warn('Não foi possível carregar movimentações pendentes:',err.message)
  }
@@ -278,7 +278,7 @@ if(per==='late'&&!r.urgent)return false;if(per==='noos'&&!r.noOS)return false;if
 if(per==='soon'&&!(r.forecast>=TODAY&&r.forecast<=new Date(Date.now()+30*86400000).toISOString().slice(0,10)))return false;
 var hay=q?normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JSON.stringify(r.raw)):'';
 if(tokens.some(function(t){var exclude=t[0]==='-';var term=normalize(t.replace(/^[+-]/,'').replace(/^"|"$/g,''));return term&&(exclude?hay.includes(term):!hay.includes(term))}))return false;
-return extraFilters.every(function(f){return normalize(r[f.k]).includes(normalize(f.v))})})}
+return extraFilters.every(function(f){var val=String(r[f.k]==null?'':r[f.k]);if(['entry','agreed','forecast','invoicedAt'].includes(f.k))val+=' '+human(r[f.k]);if(f.k==='value')val+=' '+money(r.value);return normalize(val).includes(normalize(f.v))})})}
 function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</option>'+Array.from(new Set(values)).filter(Boolean).sort().map(function(v){return '<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
 function setupFilters(){var vis=visibleRows();setSelect('typeFilter',vis.map(function(x){return x.type}),$('typeFilter').value);setSelect('statusFilter',vis.map(function(x){return x.status}),$('statusFilter').value)}
 
@@ -448,7 +448,7 @@ function openModal(id,focusField){
    '<small style="display:block;margin-top:8px;color:#738198">Cada alteração é registrada com usuário, data e hora.</small>'+
    '</div>';
  }
- $('modalBody').innerHTML=values+edit+logs;
+ $('modalBody').innerHTML=(r.pending?'<div class="pending-badge" style="margin-bottom:12px">Aguardando aprovação: '+esc(r.previousStatus)+' → '+esc(r.status)+'</div>':'')+values+edit+logs;
  $('btnSaveModal').classList.toggle('hidden',!canEdit);
  $('overlay').classList.add('show');
  if(focusField&&canEdit){var target=$(focusField==='type'?'editType':'editForecast');if(target)target.focus()}
