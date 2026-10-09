@@ -145,6 +145,16 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .excel-filter-foot{padding:10px 12px;border-top:1px solid #e8edf3;display:flex;gap:7px;justify-content:flex-end;background:#fafbfd}
 .excel-filter-foot button{padding:7px 10px;border-radius:7px;font-weight:750;font-size:11px}
 @media(max-width:620px){.excel-filter{max-width:calc(100vw - 12px)}}
+
+/* Apenas a alça ⠿ inicia a movimentação. Card = clique para detalhes. */
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px}
+.card-top strong{flex:1;min-width:0;line-height:1.45}
+.mini-card{cursor:pointer}
+.drag-handle{display:flex;align-items:center;justify-content:center;flex:none;width:31px;height:31px;border:1px solid #d6dfeb;background:#eff4f8;border-radius:9px;color:#526982;font-size:23px;line-height:1;cursor:grab;user-select:none;touch-action:none}
+.drag-handle:hover{background:#e3edd6;color:#5e7c2a;border-color:#aac58e}
+.drag-handle:active{cursor:grabbing}
+.drag-handle.disabled{opacity:.35;cursor:not-allowed}
+.mini-card.dragging{opacity:.45}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -484,8 +494,9 @@ function drawKanban(arr){
  var lanes=STATUS.map(function(s){
   var items=sorting(arr.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
-   return '<div draggable="'+(r.pending?'false':'true')+'" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
-   '<strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong><span class="prod">'+esc(r.product)+'</span>'+
+   return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
+   '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong>'+
+   '<span class="drag-handle '+(r.pending?'disabled':'')+'" title="'+(r.pending?'Aguardando aprovação':'Arraste por aqui')+'" role="button" aria-label="Arrastar OS" draggable="'+(r.pending?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
    '<div class="meta"><span>'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+
    (r.pending?'<span class="pending-badge">⏳ Aguardando aprovação</span>':'')+
    (r.urgent?badge(r.situation,'bad'):'')+'</div>'
@@ -602,7 +613,7 @@ async function saveModal(){
  finally{btn.disabled=false;btn.textContent='Salvar alterações'}
 }window.saveModal=saveModal;
 function closeModal(){$('overlay').classList.remove('show');selected=null}window.closeModal=closeModal;
-function dragStart(e,id){var r=rows.find(function(x){return x.id===id});if(!r||r.pending){e.preventDefault();return}dragging=id;e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';e.currentTarget.classList.add('dragging')}window.dragStart=dragStart;
+function dragStart(e,id){var r=rows.find(function(x){return x.id===id});if(!r||r.pending){e.preventDefault();return}dragging=id;e.stopPropagation();e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';var card=e.currentTarget.closest('.mini-card');if(card)card.classList.add('dragging')}window.dragStart=dragStart;
 function dragEnd(){dragging=null;document.querySelectorAll('.drop-target,.dragging').forEach(function(x){x.classList.remove('drop-target','dragging')})}window.dragEnd=dragEnd;
 function allowDrop(e){e.preventDefault();e.currentTarget.classList.add('drop-target')}window.allowDrop=allowDrop;
 function dragLeave(e){e.currentTarget.classList.remove('drop-target')}window.dragLeave=dragLeave;
