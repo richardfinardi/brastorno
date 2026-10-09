@@ -216,16 +216,44 @@ async function removeSnapshot(key){
   })}finally{db.close()}
  }catch(e){}
 }
+
+function applyPendingVisuals(){
+ var byOS=new Map(),byNumber=new Map();
+ pendingRequests.forEach(function(p){
+  if(p.cod_os!==undefined&&p.cod_os!==null)byOS.set(String(p.cod_os),p);
+  if(p.n_os)byNumber.set(String(p.n_os).trim(),p)
+ });
+ rows=baseRows.map(function(row){
+  var r=Object.assign({},row),id=osCode(r),p=(id!==null?byOS.get(String(id)):null)||(r.os?byNumber.get(String(r.os).trim()):null);
+  if(!p||!p.status_novo)return r;
+  if(normalize(r.status)!==normalize(p.status_anterior))return r;
+  r.previousStatus=r.status;r.status=String(p.status_novo).toUpperCase();
+  r.pending=true;r.pendingInfo=p;
+  return r
+ })
+}
+async function loadPending(){
+ if(!profile)return;
+ try{
+  var result=await api('/controle_fabrica/pendentes?_t='+Date.now()),items=flattenResult(result);
+  // A fila é validada no servidor: não armazenar solicitações de terceiros no navegador.
+  pendingRequests=items;
+  applyPendingVisuals();
+  if(hasData)render();
+ }catch(err){
+  if(err.status!==404&&err.status!==405)console.warn('Não foi possível carregar movimentações pendentes:',err.message)
+ }
+}
 function applyRows(raw,stamp,fromCache){
  if(!profile||!Array.isArray(raw))return;
- rows=raw.map(normalizeItem);hasData=true;cacheStamp=stamp||Date.now();
- setupFilters();
+ baseRows=raw.map(normalizeItem);
+ applyPendingVisuals();
+ hasData=true;cacheStamp=stamp||Date.now();setupFilters();
  $('updated').textContent=rows.length+' itens • '+new Date(cacheStamp).toLocaleString('pt-BR');
- cacheLabel(fromCache?'Dados salvos • atualizando…':'Dados atualizados agora',fromCache?'loading':'');
+ cacheLabel(fromCache?'Dados salvos • atualizando…':'Atualizado',fromCache?'loading':'');
  render();
- setNotice(fromCache?'Exibindo os últimos dados salvos. Atualizando o CPS em segundo plano.':'',fromCache?'ok':'')
+ if(!fromCache)setNotice('')
 }
-
 function parseProfile(p){var src=(p&&p.permissoes)||p&&p.permissions||p||{};var gestor=truthy(read(src,['U_GESTOR','gestor']));var roles=STATUS.filter(function(s){return PERMS[s]&&truthy(read(src,[PERMS[s]]))});return {gestor:gestor,roles:roles,name:read(p,['usuario','nome','username'])||localStorage.getItem('brastorno_usuario_nome')||'USUÁRIO'}}
 function flattenResult(v){if(Array.isArray(v))return v;if(!v||typeof v!=='object')return [];for(var i=0;i<['dados','data','resultado','resultados','itens','items','rows','registros','records'].length;i++){var x=read(v,[['dados','data','resultado','resultados','itens','items','rows','registros','records'][i]]);if(Array.isArray(x))return x;if(x&&typeof x==='object'){var y=flattenResult(x);if(y.length)return y}}return []}
 function statusOf(raw){var n=Number(read(raw,['cod_status','status_codigo','codigo_status']));if(codeStatus[n])return codeStatus[n];var s=normalize(read(raw,['status_servico','status_os','status','fase']));if(s.includes('ENGENH'))return 'ENGENHARIA';if(s.includes('PCP'))return 'PCP';if(s.includes('COMPRA'))return 'COMPRAS';if(s.includes('PRODU'))return 'PRODUÇÃO';if(s.includes('QUALI'))return 'QUALIDADE';if(s.includes('FATUR'))return 'FATURAMENTO';if(s.includes('EXPED'))return 'EXPEDIÇÃO';if(s.includes('CONCLU'))return 'CONCLUÍDO';if(s.includes('PARALIS'))return 'PARALISADO';if(s.includes('CANCEL'))return 'CANCELADO';return 'SEM STATUS'}
@@ -345,14 +373,28 @@ function drawStatus(arr){
  var moneyBars=rank.map(function(x){return '<div class="sline" style="grid-template-columns:180px 1fr 130px"><span class="name">'+esc(x[0])+'</span><div class="track"><div class="fill" style="background:#4979a8;width:'+Math.round(x[1].value/maxValue*100)+'%"></div></div><div class="val">'+money(x[1].value)+'</div></div>'}).join('');
  $('screen').innerHTML='<section class="split"><div class="panel"><div class="panel-head"><div><h2>B. Distribuição por status</h2><p>Quantidade de itens por etapa operacional</p></div></div><div class="status-lines">'+(bars||'<div class="empty">Sem itens.</div>')+'</div></div><div class="panel"><div class="panel-head"><div><h2>Carteira por macroetapa</h2><p>Distribuição visual do mesmo conjunto de OS</p></div></div><div class="donutbox"><div class="donut" style="background:conic-gradient('+conic+')"><strong>'+arr.length+'</strong></div><div class="legend">'+legends+'</div></div></div></section><section class="panel"><div class="panel-head"><div><h2>Valor por status</h2><p>Valor dos itens agrupado por status no CPS</p></div></div><div style="padding:12px 20px;overflow-x:auto">'+(moneyBars||'<div class="empty">Sem valores.</div>')+'</div></section>'
 }
-function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p><div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Ver / movimentar</button></div>'+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
-function drawRoles(arr){$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2><p>Fila de trabalho conforme as liberações do usuário no CPS</p></div><span class="tag">'+arr.length+' disponíveis</span></div><div class="role"><div class="field"><label>Usuário / setor autorizado</label><div class="role-caption">'+(profile.gestor?'GESTOR • TODAS AS ETAPAS':profile.roles.map(esc).join(' • '))+'</div></div><div class="role-note">Exibindo apenas os itens cujo status está autorizado para o seu usuário. O gestor pode acompanhar todas as etapas.</div></div><div class="role-list">'+(sorting(arr).map(tile).join('')||'<div class="empty">Não há ordens neste status com os filtros selecionados.</div>')+'</div></section>'}
+function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p><div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></div>'+(r.pending?'<span class="pending-badge">Aguardando aprovação</span>':'')+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
+function drawRoles(arr){$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2><p>Fila de trabalho conforme as liberações do usuário no CPS</p></div><span class="tag">'+arr.length+' disponíveis</span></div><div class="role"><div class="field"><label>Usuário / setor autorizado</label><div class="role-caption">'+(profile.gestor?'GESTOR • TODAS AS ETAPAS':profile.roles.map(esc).join(' • '))+'</div></div><div class="role-note">Exibindo apenas os itens cujo status está autorizado para o seu usuário. O gestor pode acompanhar todas as etapas.</div></div><div class="role-list">'+(sorting(arr).slice(0,100).map(tile).join('')||'<div class="empty">Nenhum item neste status.</div>')+'</div></section>'}
+
 function drawKanban(arr){
- var lanes=STATUS.map(function(s){var items=arr.filter(function(r){return r.status===s});
- var cards=sorting(items).map(function(r){return '<div draggable="true" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" class="mini-card '+(r.urgent?'overdue':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong><span class="prod">'+esc(r.product)+'</span><div class="meta"><span>'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+(r.urgent?badge(r.situation,'bad'):'')+'</div>'}).join('');
- return '<section class="lane" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropOn(event,'+JSON.stringify(s).replace(/"/g,'&quot;')+')"><div class="lane-head"><span>'+esc(s)+'</span><span class="lane-count">'+items.length+'</span></div>'+ (cards||'<div class="empty">Sem cartões</div>')+'</section>'}).join('');
- $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>D. Gestão visual em cartões</h2><p>Estilo Kanban / Trello • arraste para solicitar a mudança de etapa. O CPS só é alterado após aprovação.</p></div><span class="tag">Aprovação do gestor</span></div><div class="kanban">'+lanes+'</div></section>'
+ var lanes=STATUS.map(function(s){
+  var items=sorting(arr.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
+  var cards=shown.map(function(r){
+   return '<div draggable="'+(r.pending?'false':'true')+'" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
+   '<strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong><span class="prod">'+esc(r.product)+'</span>'+
+   '<div class="meta"><span>'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+
+   (r.pending?'<span class="pending-badge">⏳ Aguardando aprovação</span>':'')+
+   (r.urgent?badge(r.situation,'bad'):'')+'</div>'
+  }).join('');
+  var extra=items.length>limit?'<button class="btn small" onclick="showMoreLane('+JSON.stringify(s).replace(/"/g,'&quot;')+')">Mostrar mais ('+(items.length-limit)+')</button>':'';
+  return '<section class="lane" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropOn(event,'+JSON.stringify(s).replace(/"/g,'&quot;')+')">'+
+   '<div class="lane-head"><span>'+esc(s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
+   (cards||'<div class="empty">Sem cartões</div>')+extra+'</section>'
+ }).join('');
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>D. Gestão visual em cartões</h2></div><span class="tag">'+arr.length+' cartões</span></div><div class="kanban">'+lanes+'</div></section>'
 }
+function showMoreLane(status){laneLimits[status]=(laneLimits[status]||45)+45;drawKanban(filtered())}
+window.showMoreLane=showMoreLane;
 function drawApprovals(){if(!profile.gestor)return;var cards=pending.map(function(p){var id=p.id||p.codigo,os=p.os||p.n_os||'Item',de=p.status_anterior||p.origem||'',para=p.status_novo||p.destino||'',autor=p.usuario||p.solicitante||'',at=p.criado_em||p.data||'';
 return '<article class="task"><div class="task-head"><strong>'+esc(os)+'</strong>'+badge('Aguardando gestor','pending')+'</div><h3>'+esc(de)+' → '+esc(para)+'</h3><p>Solicitante: '+esc(autor)+'<br>Registro: '+esc(at)+'</p><div class="inline-actions"><button class="btn primary small" onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',true)">Aprovar</button><button class="btn small" onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',false)">Rejeitar</button></div></article>'}).join('');
 $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>Solicitações de movimentação</h2><p>Nenhuma alteração é aplicada ao CPS antes da aprovação.</p></div><button class="btn small" onclick="loadApprovals()">Atualizar solicitações</button></div><div class="role-list">'+(cards||'<div class="empty">Nenhuma solicitação pendente.</div>')+'</div></section>'}
@@ -453,20 +495,38 @@ async function saveModal(){
  finally{btn.disabled=false;btn.textContent='Salvar alterações'}
 }window.saveModal=saveModal;
 function closeModal(){$('overlay').classList.remove('show');selected=null}window.closeModal=closeModal;
-function dragStart(e,id){dragging=id;e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';e.currentTarget.classList.add('dragging')}window.dragStart=dragStart;
+function dragStart(e,id){var r=rows.find(function(x){return x.id===id});if(!r||r.pending){e.preventDefault();return}dragging=id;e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';e.currentTarget.classList.add('dragging')}window.dragStart=dragStart;
 function dragEnd(){dragging=null;document.querySelectorAll('.drop-target,.dragging').forEach(function(x){x.classList.remove('drop-target','dragging')})}window.dragEnd=dragEnd;
 function allowDrop(e){e.preventDefault();e.currentTarget.classList.add('drop-target')}window.allowDrop=allowDrop;
 function dragLeave(e){e.currentTarget.classList.remove('drop-target')}window.dragLeave=dragLeave;
-async function dropOn(e,to){e.preventDefault();e.currentTarget.classList.remove('drop-target');var id=e.dataTransfer.getData('text/plain')||dragging;dragEnd();var r=rows.find(function(x){return x.id===id});if(!r||r.status===to)return;
-if(!profile.gestor&&profile.roles.indexOf(r.status)<0)return;
-if(!confirm('Solicitar ao gestor a movimentação de '+(r.os||r.quote)+' de '+r.status+' para '+to+'?\n\nO status só será efetivado após aprovação.'))return;
-try{await api('/controle_fabrica/solicitacoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cod_os:read(r.raw,['cod_os','codigo_os']),n_os:r.os,guid_linha:read(r.raw,['guid_linha']),status_anterior:r.status,status_novo:to,origem:'KANBAN'})});
-setNotice('Solicitação enviada para aprovação do gestor. O status atual permanece inalterado.','ok');}
-catch(err){setNotice(err.status===404||err.status===405?'O fluxo de solicitação/aprovação ainda precisa ser habilitado na API. Nenhuma mudança foi registrada.':'Não foi possível enviar a solicitação: '+err.message,'warn')}}window.dropOn=dropOn;
+
+async function dropOn(e,to){
+ e.preventDefault();e.currentTarget.classList.remove('drop-target');
+ var id=(e.dataTransfer&&e.dataTransfer.getData('text/plain'))||dragging;
+ dragEnd();
+ var r=rows.find(function(x){return x.id===id});
+ if(!r||r.status===to||r.pending)return;
+ if(!profile.gestor&&!profile.roles.includes(r.status))return;
+ if(!confirm('Mover '+(r.os||r.quote)+' de '+r.status+' para '+to+'?\n\nAguardará aprovação do gestor.'))return;
+ try{
+  var result=await api('/controle_fabrica/solicitacoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    cod_os:osCode(r),n_os:r.os,guid_linha:read(r.raw,['guid_linha']),
+    status_anterior:r.status,status_novo:to,origem:'KANBAN'
+  })});
+  pendingRequests=pendingRequests.filter(function(p){return String(p.cod_os)!==String(osCode(r))});
+  pendingRequests.push({id:result.id,cod_os:osCode(r),n_os:r.os,status_anterior:r.status,status_novo:to,usuario:profile.name,status:'PENDENTE'});
+  applyPendingVisuals();render();
+  setNotice('Movimentação aguardando aprovação.','ok');
+  // Persiste imediatamente o visual no destino, mesmo se o ERP ainda não mudou.
+  loadPending();
+  if(profile.gestor)loadApprovals()
+ }catch(err){setNotice('Não foi possível movimentar: '+err.message,'error')}
+}
+window.dropOn=dropOn;
 async function loadApprovals(){if(!profile||!profile.gestor)return;try{pending=flattenResult(await api('/controle_fabrica/solicitacoes?status=PENDENTE'));$('approvalCount').textContent=pending.length?'('+pending.length+')':'';if(view==='approval')drawApprovals()}
 catch(err){pending=[];$('approvalCount').textContent='';if(view==='approval'){drawApprovals();setNotice('Consulta de aprovações não disponível na API: '+err.message,'warn')}}}window.loadApprovals=loadApprovals;
 async function decision(id,approve){if(!confirm((approve?'Aprovar e aplicar':'Rejeitar')+' esta solicitação?'))return;
-try{await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(id)+'/'+(approve?'aprovar':'rejeitar'),{method:'POST'});await loadApprovals();await loadData({force:true});setNotice('Solicitação '+(approve?'aprovada':'rejeitada')+' com sucesso.','ok')}
+try{await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(id)+'/'+(approve?'aprovar':'rejeitar'),{method:'POST'});await loadApprovals();await loadPending();await loadData({force:true});setNotice('Solicitação '+(approve?'aprovada':'rejeitada')+' com sucesso.','ok')}
 catch(err){setNotice('A operação não foi confirmada pela API: '+err.message,'error')}}window.decision=decision;
 
 async function loadData(options){
@@ -484,6 +544,7 @@ async function loadData(options){
    if(!Array.isArray(raw))throw Error('Resposta inesperada da API');
    var stamp=Date.now();lastRefreshAt=stamp;
    applyRows(raw,stamp,false);
+   loadPending();
    saveSnapshot(cacheKey,raw,stamp).catch(function(e){console.warn('Cache do navegador indisponível:',e)});
   }catch(err){
    console.warn('Falha de atualização do Controle de Fábrica:',err);
@@ -517,7 +578,7 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){rows=[];hasData=false;cacheStamp=0}
+   if(changed){rows=[];baseRows=[];pendingRequests=[];hasData=false;cacheStamp=0}
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
@@ -538,6 +599,7 @@ async function loadAll(){
    if(!hasData)$('screen').innerHTML='<div class="skel">Carregando dados do CPS pela primeira vez…<br>Na próxima visita, os dados salvos abrirão imediatamente.</div>';
    // Inicia atualização sem bloquear a interface nem apagar os dados salvos.
    loadData({silent:true});
+   loadPending();
    if(profile.gestor)loadApprovals();
   }catch(err){
    // Não exibe qualquer dado local se as permissões não forem validadas.
