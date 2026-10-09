@@ -155,6 +155,26 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .drag-handle:active{cursor:grabbing}
 .drag-handle.disabled{opacity:.35;cursor:not-allowed}
 .mini-card.dragging{opacity:.45}
+
+/* Fila de aprovações com contexto da OS e seleção em lote */
+.approval-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:13px 17px;background:#fafbfd;border-bottom:1px solid #e4e9f0}
+.approval-toolbar .approval-select-all{display:flex;align-items:center;gap:7px;font-weight:800;margin-right:9px;cursor:pointer}
+.approval-toolbar input[type=checkbox],.approval-select input{accent-color:#708e34;width:16px;height:16px;flex:none}
+#approvalSelectedCount{color:#687a91;font-size:12px;margin-right:auto}
+.approval-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:12px;padding:15px}
+.approval-card{border:1px solid #dfe7f0;border-radius:14px;overflow:hidden;min-width:0;background:white;box-shadow:0 1px 5px #13264b0a}
+.approval-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-bottom:1px solid #eef1f5}
+.approval-select{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}
+.approval-select strong{color:#142446;font-size:16px}
+.approval-content{padding:12px 14px;min-width:0}
+.approval-content h3{font-size:14px;margin:0 0 8px;color:#1f3354;line-height:1.35;overflow-wrap:anywhere}
+.approval-client{color:#63768d;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.approval-meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px;font-size:11px;color:#516783}
+.approval-meta span{background:#f2f5f8;border-radius:6px;padding:5px 7px}
+.approval-foot{border-top:1px solid #eef1f5;background:#fafbfd;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px;color:#63748c}
+.approval-foot small{color:#92a0b1}
+.approval-foot .inline-actions{margin-left:auto}
+@media(max-width:600px){.approval-grid{grid-template-columns:1fr}.approval-toolbar{gap:7px}}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -198,6 +218,7 @@ var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','O
 var cacheKey='',cacheStamp=0,lastRefreshAt=0,fetchingData=null,hasData=false,initializing=null;
 var CACHE_NAME='brastorno_fabrica_cache_v3',CACHE_TABLE='snapshots',CACHE_SCHEMA=3;
 var excelKey=null,excelValues=[],excelSelected=new Set(),excelSearch='',excelPopupOpen=false;
+var selectedApprovalIds=new Set(),approvalBusy=false;
 var baseRows=[],pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
@@ -510,9 +531,58 @@ function drawKanban(arr){
 }
 function showMoreLane(status){laneLimits[status]=(laneLimits[status]||45)+45;drawKanban(filtered())}
 window.showMoreLane=showMoreLane;
-function drawApprovals(){if(!profile.gestor)return;var cards=pending.map(function(p){var id=p.id||p.codigo,os=p.os||p.n_os||'Item',de=p.status_anterior||p.origem||'',para=p.status_novo||p.destino||'',autor=p.usuario||p.solicitante||'',at=p.criado_em||p.data||'';
-return '<article class="task"><div class="task-head"><strong>'+esc(os)+'</strong>'+badge('Aguardando gestor','pending')+'</div><h3>'+esc(de)+' → '+esc(para)+'</h3><p>Solicitante: '+esc(autor)+'<br>Registro: '+esc(at)+'</p><div class="inline-actions"><button class="btn primary small" onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',true)">Aprovar</button><button class="btn small" onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',false)">Rejeitar</button></div></article>'}).join('');
-$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>Solicitações de movimentação</h2><p>Nenhuma alteração é aplicada ao CPS antes da aprovação.</p></div><button class="btn small" onclick="loadApprovals()">Atualizar solicitações</button></div><div class="role-list">'+(cards||'<div class="empty">Nenhuma solicitação pendente.</div>')+'</div></section>'}
+
+function approvalDetails(req,byCod,byOS){
+ var code=String(req.cod_os==null?'':req.cod_os),number=String(req.n_os||req.os||'').trim();
+ return byCod.get(code)||byOS.get(number)||null
+}
+function approvalCard(req,row){
+ var id=String(req.id||req.codigo||''),os=req.n_os||req.os||row&&row.os||'OS',
+ origin=req.status_anterior||req.origem||'—',dest=req.status_novo||req.destino||'—',
+ author=req.usuario||req.solicitante||'—',at=req.criado_em||req.data||'',
+ desc=row?row.product:String(req.titulo||req.descricao||'Descrição indisponível'),
+ client=row?row.client:String(req.cliente||'—'),qty=row?row.qty:null,
+ type=row?row.type:null,deadline=row?human(row.forecast):null;
+ var checked=selectedApprovalIds.has(id)?' checked':'',dlink=row?'<button class="btn small" onclick="openModal('+JSON.stringify(row.id).replace(/"/g,'&quot;')+')">Detalhes</button>':'';
+ return '<article class="approval-card"><div class="approval-top">'+
+  '<label class="approval-select"><input type="checkbox" data-id="'+esc(id)+'" onchange="toggleApprovalPick(this)"'+checked+'><strong>OS '+esc(os)+'</strong></label>'+
+  '<span class="pending-badge">'+esc(origin)+' → '+esc(dest)+'</span></div>'+
+  '<div class="approval-content"><h3 title="'+esc(desc)+'">'+esc(desc)+'</h3><div class="approval-client" title="'+esc(client)+'">'+esc(client)+'</div>'+
+  '<div class="approval-meta">'+(type&&type!=='—'?'<span>Tipo: '+esc(type)+'</span>':'')+
+  (qty!==null&&qty!==undefined&&qty!==''?'<span>Qtde: '+esc(qty)+'</span>':'')+
+  (deadline&&deadline!=='—'?'<span>Liberação: '+esc(deadline)+'</span>':'')+'</div></div>'+
+  '<div class="approval-foot"><span>Solicitado por <b>'+esc(author)+'</b><br><small>'+esc(new Date(at).toLocaleString('pt-BR')==='Invalid Date'?at:new Date(at).toLocaleString('pt-BR'))+'</small></span>'+
+  '<div class="inline-actions">'+dlink+
+  '<button class="btn primary small" '+(approvalBusy?'disabled':'')+' onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',true)">Aprovar</button>'+
+  '<button class="btn small" '+(approvalBusy?'disabled':'')+' onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',false)">Rejeitar</button></div></div></article>'
+}
+function drawApprovals(){
+ if(!profile||!profile.gestor)return;
+ var byCod=new Map(),byOS=new Map();
+ baseRows.forEach(function(row){var code=osCode(row);if(code!==null&&!byCod.has(String(code)))byCod.set(String(code),row);if(row.os&&!byOS.has(String(row.os).trim()))byOS.set(String(row.os).trim(),row)});
+ var valid=new Set(pending.map(function(x){return String(x.id||x.codigo||'')}));selectedApprovalIds.forEach(function(id){if(!valid.has(id))selectedApprovalIds.delete(id)});
+ var all=pending.length>0&&selectedApprovalIds.size===pending.length;
+ var cards=pending.map(function(p){return approvalCard(p,approvalDetails(p,byCod,byOS))}).join('');
+ var tool='<div class="approval-toolbar"><label class="approval-select-all"><input type="checkbox" onchange="toggleApprovalAll(this.checked)" '+(all?'checked':'')+' '+(!pending.length?'disabled':'')+'> Selecionar tudo</label>'+
+  '<span id="approvalSelectedCount">'+selectedApprovalIds.size+' selecionada(s)</span>'+
+  '<button class="btn primary small" '+(!selectedApprovalIds.size||approvalBusy?'disabled':'')+' onclick="batchDecision(true)">✓ Aprovar selecionadas</button>'+
+  '<button class="btn small" '+(!selectedApprovalIds.size||approvalBusy?'disabled':'')+' onclick="batchDecision(false)">Rejeitar selecionadas</button>'+
+  '<button class="btn small" onclick="loadApprovals()" '+(approvalBusy?'disabled':'')+'>↻ Atualizar</button>'+
+  '</div>';
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>Solicitações de movimentação</h2><p>'+pending.length+' aguardando análise</p></div><span class="tag">'+pending.length+' pendentes</span></div>'+tool+
+  '<div class="approval-grid">'+(cards||'<div class="empty">Nenhuma solicitação pendente.</div>')+'</div></section>'
+}
+function toggleApprovalPick(el){
+ var id=el.dataset.id;if(el.checked)selectedApprovalIds.add(id);else selectedApprovalIds.delete(id);
+ if(view==='approval')drawApprovals()
+}
+window.toggleApprovalPick=toggleApprovalPick;
+function toggleApprovalAll(yes){
+ selectedApprovalIds= new Set(yes?pending.map(function(p){return String(p.id||p.codigo||'')}):[]);
+ if(view==='approval')drawApprovals()
+}
+window.toggleApprovalAll=toggleApprovalAll;
+function batchDecision(approve){return runApprovalBatch(Array.from(selectedApprovalIds),approve)}window.batchDecision=batchDecision;
 function render(){if(!profile)return;var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(Array.isArray(f.values)?f.values.length+' selecionado(s)':f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
 if(view==='fabric')drawTable(arr);else if(view==='status')drawStatus(arr);else if(view==='roles')drawRoles(arr);else if(view==='kanban')drawKanban(arr);else drawApprovals()}
 function changeView(v){if(!profile)return;if(!profile.gestor&&['fabric','status','approval'].includes(v))return;view=v;['fabric','status','roles','kanban','approval'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===v)});render()}window.changeView=changeView;
@@ -641,11 +711,36 @@ async function dropOn(e,to){
  }catch(err){setNotice('Não foi possível movimentar: '+err.message,'error')}
 }
 window.dropOn=dropOn;
-async function loadApprovals(){if(!profile||!profile.gestor)return;try{pending=flattenResult(await api('/controle_fabrica/solicitacoes?status=PENDENTE'));$('approvalCount').textContent=pending.length?'('+pending.length+')':'';if(view==='approval')drawApprovals()}
+async function loadApprovals(){if(!profile||!profile.gestor)return;try{pending=flattenResult(await api('/controle_fabrica/solicitacoes?status=PENDENTE'));$('approvalCount').textContent=pending.length?'('+pending.length+')':'';if(view==='approval'&&!approvalBusy)drawApprovals()}
 catch(err){pending=[];$('approvalCount').textContent='';if(view==='approval'){drawApprovals();setNotice('Consulta de aprovações não disponível na API: '+err.message,'warn')}}}window.loadApprovals=loadApprovals;
-async function decision(id,approve){if(!confirm((approve?'Aprovar e aplicar':'Rejeitar')+' esta solicitação?'))return;
-try{await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(id)+'/'+(approve?'aprovar':'rejeitar'),{method:'POST'});await loadApprovals();await loadPending();await loadData({force:true});setNotice('Solicitação '+(approve?'aprovada':'rejeitada')+' com sucesso.','ok')}
-catch(err){setNotice('A operação não foi confirmada pela API: '+err.message,'error')}}window.decision=decision;
+
+async function runApprovalBatch(ids,approve){
+ if(approvalBusy||!profile||!profile.gestor||!ids.length)return;
+ if(!confirm((approve?'Aprovar':'Rejeitar')+' '+ids.length+' solicitaç'+(ids.length===1?'ão':'ões')+'?'))return;
+ approvalBusy=true;
+ var successes=0,errors=[],action=approve?'aprovar':'rejeitar';
+ if(view==='approval')drawApprovals();
+ try{
+  // Executa uma por vez: reutiliza as transações e validações do servidor, sem mudar a API.
+  for(var i=0;i<ids.length;i++){
+   cacheLabel('Processando '+(i+1)+'/'+ids.length+'…','loading');
+   try{await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(ids[i])+'/'+action,{method:'POST'});
+    successes++;selectedApprovalIds.delete(ids[i])
+   }catch(e){errors.push('Solicitação '+(i+1)+': '+e.message)}
+  }
+ }finally{
+  approvalBusy=false;
+  await Promise.allSettled([loadApprovals(),loadPending(),loadData({force:true})]);
+  if(successes){
+   setNotice(successes+' '+(approve?'aprovada(s)':'rejeitada(s)')+(errors.length?' • '+errors.length+' falha(s): '+errors.slice(0,3).join(' | '):''),errors.length?'warn':'ok')
+  }else if(errors.length)setNotice('Nenhuma operação concluída. '+errors.slice(0,3).join(' | '),'error');
+  cacheLabel('Atualizado');
+  if(view==='approval')drawApprovals()
+ }
+}
+function decision(id,approve){return runApprovalBatch([String(id)],approve)}
+window.decision=decision;
+
 
 async function loadData(options){
  options=options||{};
