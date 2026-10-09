@@ -432,7 +432,7 @@ function multiVisible(k){var q=normalize($(k+'Search').value);return multiOption
 function renderMulti(k){
  var chosen=multiSelections[k],vals=multiVisible(k),selected=Array.from(chosen);
  $(k+'Filter').innerHTML=esc(selected.length===0?'Todos':selected.length===1&&selected[0]==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':selected.length===1?selected[0]:selected.length+' selecionados')+' <span>▾</span>';
- $(k+'Options').innerHTML=vals.map(function(v){return '<label class="multi-option"><input type="checkbox" data-value="'+esc(v)+'" '+(chosen.has(v)?'checked':'')+' onchange="multiChoice(\''+k+'\',this)">'+esc(v)+'</label>'}).join('')||'<div class="empty" style="padding:12px">Nenhuma opção</div>'
+ $(k+'Options').innerHTML=vals.map(function(v){return '<label class="multi-option"><input type="checkbox" data-value="'+esc(v)+'" '+(chosen.has(v)?'checked':'')+' onchange="multiChoice(\''+k+'\',this)">'+esc(v==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':v)+'</label>'}).join('')||'<div class="empty" style="padding:12px">Nenhuma opção</div>'
 }
 function multiClose(){['type','status','period'].forEach(function(k){$(k+'Menu').classList.add('hidden');$(k+'Filter').setAttribute('aria-expanded','false')})}
 function toggleMulti(k){var open=$(k+'Menu').classList.contains('hidden');multiClose();if(open){$(k+'Menu').classList.remove('hidden');$(k+'Filter').setAttribute('aria-expanded','true');renderMulti(k);$(k+'Search').focus()}}
