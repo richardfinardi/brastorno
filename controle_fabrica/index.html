@@ -201,6 +201,9 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .history-control{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px;font-weight:750;color:#45672c;border:1px solid #d6e5cc;border-radius:9px;background:#f3f8ee;padding:7px 9px;cursor:pointer}
 .history-control input{accent-color:var(--olive);width:16px;height:16px}
 @media(max-width:760px){.history-control{white-space:normal}.multi-field{flex:1 1 160px}}
+
+.kanban-move{width:100%;margin-top:10px;padding:7px 10px;border-radius:8px;border:1px solid #d6e2cf;background:#f5f9f0;color:#4b6b32;font-size:11px;font-weight:800;cursor:pointer}
+.kanban-move:focus{outline:2px solid #88a951;outline-offset:1px}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -248,7 +251,7 @@ var selectedApprovalIds=new Set(),approvalBusy=false;
 var catalogoTipos=[],tiposPromise=null,tiposCarregados=false;
 var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoading=null,pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var multiSelections={type:new Set(),status:new Set(),period:new Set()},multiOptions={type:[],status:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
-var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null;
+var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null,kanbanScrollFrame=0,kanbanScrollSpeed=0;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
 var $=function(x){return document.getElementById(x)};
 function esc(s){return String(s===null||s===undefined?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]})}
@@ -613,6 +616,7 @@ function drawKanban(arr){
    '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong>'+
    '<span class="drag-handle '+((r.status==='FATURADO'||r.status==='SEM OS'||(r.pending&&!canAdjustPending(r)))?'disabled':'')+'" title="'+(['FATURADO','SEM OS'].includes(r.status)?'Status calculado, não permite movimentação':(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui'))+'" role="button" aria-label="Arrastar OS" draggable="'+((['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r)))?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
    '<div class="meta"><span>'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+
+    ((!['FATURADO','SEM OS'].includes(r.status))?'<select class="kanban-move" aria-label="Mover '+esc(r.os)+' para outro status" onclick="event.stopPropagation()" onchange="event.stopPropagation();moveCard('+JSON.stringify(r.id).replace(/"/g,'&quot;')+',this.value);this.selectedIndex=0"><option value="">↪ Mover para...</option>'+STATUS.filter(function(to){return !['SEM OS','FATURADO'].includes(to)&&to!==r.status&&(profile.gestor||profile.roles.includes(r.status))}).map(function(to){return '<option value="'+esc(to)+'">'+esc(to==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':to)+'</option>'}).join('')+'</select>':'')+
    (r.pending?'<span class="pending-badge">⏳ '+esc(r.previousStatus)+' → '+esc(r.status)+' • Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
    (r.urgent?badge(r.situation,'bad'):'')+'</div>'
   }).join('');
@@ -621,7 +625,7 @@ function drawKanban(arr){
    '<div class="lane-head"><span>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
    (cards||'<div class="empty">Sem cartões</div>')+extra+'</section>'
  }).join('');
- $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>D. Gestão visual em cartões</h2></div><span class="tag">'+arr.length+' cartões</span></div><div class="kanban">'+lanes+'</div></section>'
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>D. Gestão visual em cartões</h2><p>Arraste até a borda para rolar ou utilize "Mover para..." no cartão.</p></div><span class="tag">'+arr.length+' cartões</span></div><div class="kanban" ondragover="kanbanDragOver(event)" ondragleave="if(!event.currentTarget.contains(event.relatedTarget))stopKanbanScroll()">'+lanes+'</div></section>'
 }
 function showMoreLane(status){laneLimits[status]=(laneLimits[status]||45)+45;drawKanban(filtered())}
 window.showMoreLane=showMoreLane;
@@ -843,8 +847,33 @@ async function saveModal(){
 window.saveModal=saveModal;
 function closeModal(){$('overlay').classList.remove('show');selected=null}window.closeModal=closeModal;
 function canAdjustPending(r){return !!(r&&r.pending&&r.pendingInfo&&r.pendingInfo.id&&profile&&(profile.gestor||normalize(r.pendingInfo.usuario)===normalize(profile.name)))}
-function dragStart(e,id){var r=rows.find(function(x){return x.id===id});if(!r||['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r))){e.preventDefault();return}dragging=id;e.stopPropagation();e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';var card=e.currentTarget.closest('.mini-card');if(card)card.classList.add('dragging')}window.dragStart=dragStart;
-function dragEnd(){dragging=null;document.querySelectorAll('.drop-target,.dragging').forEach(function(x){x.classList.remove('drop-target','dragging')})}window.dragEnd=dragEnd;
+function dragStart(e,id){
+ var r=rows.find(function(x){return x.id===id});
+ if(!r||['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r))){e.preventDefault();return}
+ dragging=id;e.stopPropagation();e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';
+ var card=e.currentTarget.closest('.mini-card');if(card)card.classList.add('dragging')
+}window.dragStart=dragStart;
+function stopKanbanScroll(){kanbanScrollSpeed=0;if(kanbanScrollFrame)cancelAnimationFrame(kanbanScrollFrame);kanbanScrollFrame=0}
+function kanbanScrollStep(){
+ var el=document.querySelector('#screen .kanban');
+ if(!dragging||!el||!kanbanScrollSpeed){stopKanbanScroll();return}
+ el.scrollLeft+=kanbanScrollSpeed;
+ kanbanScrollFrame=requestAnimationFrame(kanbanScrollStep)
+}
+function kanbanDragOver(e){
+ if(!dragging)return;
+ e.preventDefault();
+ var el=e.currentTarget,rect=el.getBoundingClientRect(),edge=Math.min(125,rect.width*.27),x=e.clientX;
+ var speed=0;
+ if(x<rect.left+edge)speed=-Math.max(3,Math.round((rect.left+edge-x)/edge*23));
+ if(x>rect.right-edge)speed=Math.max(3,Math.round((x-(rect.right-edge))/edge*23));
+ if(speed<0&&el.scrollLeft<=0)speed=0;
+ if(speed>0&&el.scrollLeft+el.clientWidth>=el.scrollWidth-1)speed=0;
+ kanbanScrollSpeed=speed;
+ if(speed&&!kanbanScrollFrame)kanbanScrollFrame=requestAnimationFrame(kanbanScrollStep)
+}
+window.kanbanDragOver=kanbanDragOver;
+function dragEnd(){dragging=null;stopKanbanScroll();document.querySelectorAll('.drop-target,.dragging').forEach(function(x){x.classList.remove('drop-target','dragging')})}window.dragEnd=dragEnd;
 function allowDrop(e){e.preventDefault();e.currentTarget.classList.add('drop-target')}window.allowDrop=allowDrop;
 function dragLeave(e){e.currentTarget.classList.remove('drop-target')}window.dragLeave=dragLeave;
 
@@ -875,6 +904,11 @@ async function undoPending(id){
  var r=rows.find(function(x){return x.id===id});if(r&&r.pending)await adjustPending(r,r.previousStatus)
 }
 window.undoPending=undoPending;
+function moveCard(id,to){
+ if(!to)return;
+ return dropOn({preventDefault:function(){},currentTarget:null,dataTransfer:{getData:function(){return id}}},to)
+}
+window.moveCard=moveCard;
 async function dropOn(e,to){
  e.preventDefault();
  if(e.currentTarget&&e.currentTarget.classList)e.currentTarget.classList.remove('drop-target');
