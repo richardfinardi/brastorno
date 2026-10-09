@@ -14,6 +14,8 @@ app.include_router(controle_fabrica_router)
 
 3. Reiniciar o serviço e confirmar `GET /controle_fabrica/perfil` e `GET /controle_fabrica/dados` com header `Authorization: Bearer <token>`. O frontend só utiliza **/controle_fabrica/dados**, filtrado pelo servidor. Sem essas rotas, não carrega dados.
 4. Garantir que o arquivo `controle_fabrica.sql` esteja na pasta `sql/` ao lado da API; alternativamente configurar `SQL_DIR` para apontar para a pasta SQL. A busca ignora diferenças entre maiúsculas e minúsculas.
+5. **Histórico sob demanda (somente U_GESTOR):** copiar `controle_fabrica_historico.sql` **ao lado de `controle_fabrica_perfil.py`**, **nunca** para `sql/`, pois ali viraria endpoint automático sem a proteção gerencial. Instalar também a versão atualizada de `controle_fabrica_perfil.py` e reiniciar a API.
+6. Confirmar `GET /controle_fabrica/historico` com Bearer do gestor (200) e de outro usuário (403). A página carrega apenas pendentes por padrão; o gestor marca **Exibir concluídos e faturados** para chamar a rota do histórico uma vez, sob demanda.
 
 As permissões são lidas da tabela `CSENHA`, empresa 1: `U_GESTOR, U_ENG, U_PCP, U_COMPRAS, U_PROD, U_CQ, U_FAT, U_EXP`.
 
