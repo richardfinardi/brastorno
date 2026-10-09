@@ -112,12 +112,12 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 @media(max-width:1100px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.kpi{padding:8px}.kpi .num{font-size:17px}}
 @media(max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.edit-section .cols{grid-template-columns:1fr}.updated-block{display:none}}
 </style></head><body>
-<header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>ERP CPS • Ambiente integrado v1.2</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
+<header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
 <button class="btn ghost small" id="reloadBtn" onclick="loadAll()">↻ Atualizar</button><button class="btn ghost small" onclick="logout()">Sair</button></div></div></header>
 <div class="wrap">
-<section class="hero"><div><div class="eyebrow">Gestão industrial • ERP CPS</div><h1>Controle de Fábrica</h1>
-<div class="subtitle">Quatro visões conectadas para acompanhar carteira, programação, andamento, responsabilidades e faturamento.</div></div><div class="subtitle updated-block"><div id="updated">Carregando dados</div><span id="cacheState" class="cache-state loading">Conectando…</span></div></section>
+<section class="hero"><div><div class="eyebrow">GESTÃO INDUSTRIAL</div><h1>Controle de Fábrica</h1>
+<div class="subtitle">Acompanhe serviços, prazos, responsáveis e movimentações.</div></div><div class="subtitle updated-block"><div id="updated">Carregando dados</div><span id="cacheState" class="cache-state loading">Conectando…</span></div></section>
 <div id="notice" class="notice">Validando o acesso ao Controle de Fábrica…</div>
 
 <nav class="tabs hidden" id="tabs" aria-label="Telas do controle">
@@ -127,7 +127,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <button class="tab" id="tab-kanban" onclick="changeView('kanban')"><em>D.</em> Cartões / Kanban</button>
 <button class="tab hidden" id="tab-approval" onclick="changeView('approval')">✓ Aprovações <span id="approvalCount"></span></button></nav>
 <div class="kpis hidden" id="metrics"></div>
-<section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquisa e filtros sincronizados entre as abas e o Kanban.</p></div>
+<section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquise ou selecione os itens desejados.</p></div>
 <div class="panel-actions"><button class="btn small" id="toggleFiltersBtn" onclick="toggleFilters()">▴ Recolher filtros</button><button class="btn small" onclick="clearFilters()">Limpar</button></div></div>
 <div id="filtersBody"><div class="filters"><div class="field search"><label>Pesquisa geral dinâmica</label><input id="q" placeholder="OS, cliente, produto, orçamento, NF, observação…"></div>
 <div class="field"><label>Tipo</label><select id="typeFilter"><option value="">Todos</option></select></div>
@@ -152,7 +152,7 @@ var codeStatus={6:'ENGENHARIA',7:'PCP',8:'COMPRAS',9:'PRODUÇÃO',10:'QUALIDADE'
 var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['month','MÊS'],['year','ANO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
 var cacheKey='',cacheStamp=0,lastRefreshAt=0,fetchingData=null,hasData=false,initializing=null;
 var CACHE_NAME='brastorno_fabrica_cache_v3',CACHE_TABLE='snapshots',CACHE_SCHEMA=3;
-var baseRows=[],pendingRequests=[],pageIndex=1,pageSize=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
+var baseRows=[],pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
 var $=function(x){return document.getElementById(x)};
@@ -344,7 +344,7 @@ function drawTable(arr){
 }
 function changePage(x){pageIndex=x;drawTable(filtered())}window.changePage=changePage;
 function changePageSize(n){pageSize=Number(n)||100;pageIndex=1;drawTable(filtered())}window.changePageSize=changePageSize;
-function clearColumnFilters(){extraFilters=[];pageIndex=1;render()}window.clearColumnFilters=clearColumnFilters;
+function clearColumnFilters(){extraFilters=[];pageIndex=1;rolesLimit=100;render()}window.clearColumnFilters=clearColumnFilters;
 function filterColumn(el){
  var key=el.dataset.key,value=el.value,caret=el.selectionStart,scroll=el.closest('.table-wrap'),scrollLeft=scroll?scroll.scrollLeft:0;
  clearTimeout(columnFilterTimer);
@@ -374,8 +374,14 @@ function drawStatus(arr){
  $('screen').innerHTML='<section class="split"><div class="panel"><div class="panel-head"><div><h2>B. Distribuição por status</h2><p>Quantidade de itens por etapa operacional</p></div></div><div class="status-lines">'+(bars||'<div class="empty">Sem itens.</div>')+'</div></div><div class="panel"><div class="panel-head"><div><h2>Carteira por macroetapa</h2><p>Distribuição visual do mesmo conjunto de OS</p></div></div><div class="donutbox"><div class="donut" style="background:conic-gradient('+conic+')"><strong>'+arr.length+'</strong></div><div class="legend">'+legends+'</div></div></div></section><section class="panel"><div class="panel-head"><div><h2>Valor por status</h2><p>Valor dos itens agrupado por status no CPS</p></div></div><div style="padding:12px 20px;overflow-x:auto">'+(moneyBars||'<div class="empty">Sem valores.</div>')+'</div></section>'
 }
 function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p><div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></div>'+(r.pending?'<span class="pending-badge">Aguardando aprovação</span>':'')+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
-function drawRoles(arr){$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2><p>Fila de trabalho conforme as liberações do usuário no CPS</p></div><span class="tag">'+arr.length+' disponíveis</span></div><div class="role"><div class="field"><label>Usuário / setor autorizado</label><div class="role-caption">'+(profile.gestor?'GESTOR • TODAS AS ETAPAS':profile.roles.map(esc).join(' • '))+'</div></div><div class="role-note">Exibindo apenas os itens cujo status está autorizado para o seu usuário. O gestor pode acompanhar todas as etapas.</div></div><div class="role-list">'+(sorting(arr).slice(0,100).map(tile).join('')||'<div class="empty">Nenhum item neste status.</div>')+'</div></section>'}
-
+function drawRoles(arr){
+ var sorted=sorting(arr),cards=sorted.slice(0,rolesLimit).map(tile).join('');
+ var more=arr.length>rolesLimit?'<button class="btn small" style="margin:10px 16px 18px" onclick="moreRoles()">Mostrar mais '+Math.min(100,arr.length-rolesLimit)+' de '+(arr.length-rolesLimit)+' restantes</button>':'';
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2></div><span class="tag">'+arr.length+' disponíveis</span></div>'+
+ '<div class="role"><div class="field"><label>Setor</label><div class="role-caption">'+(profile.gestor?'TODAS AS ETAPAS':profile.roles.map(esc).join(' • '))+'</div></div></div>'+
+ '<div class="role-list">'+(cards||'<div class="empty">Nenhum item neste status.</div>')+'</div>'+more+'</section>'
+}
+function moreRoles(){rolesLimit+=100;drawRoles(filtered())}window.moreRoles=moreRoles;
 function drawKanban(arr){
  var lanes=STATUS.map(function(s){
   var items=sorting(arr.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
