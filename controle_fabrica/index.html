@@ -150,26 +150,75 @@ return extraFilters.every(function(f){return normalize(r[f.k]).includes(normaliz
 function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</option>'+Array.from(new Set(values)).filter(Boolean).sort().map(function(v){return '<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
 function setupFilters(){var vis=visibleRows();setSelect('typeFilter',vis.map(function(x){return x.type}),$('typeFilter').value);setSelect('statusFilter',vis.map(function(x){return x.status}),$('statusFilter').value);
 $('columnSelect').innerHTML=FIELDS.map(function(f){return '<option value="'+f[0]+'">'+f[1]+'</option>'}).join('')}
-function badge(s,kind){return '<span class="badge '+(kind||'')+'">'+esc(s)+'</span>'}
-function label(s){return badge(s)}
-function metrics(arr){var active=arr.filter(function(r){return !r.done}),late=active.filter(function(r){return r.urgent});
-var k=[['Itens na visão',arr.length],['Carteira ativa',money(active.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0))],['Itens em alerta',late.length],['Orçamentos sem OS',active.filter(function(r){return r.noOS}).length]];
-$('metrics').innerHTML=k.map(function(x){return '<article class="kpi"><div class="label">'+esc(x[0])+'</div><div class="num">'+esc(x[1])+'</div></article>'}).join('')}
-function cell(r,k){var v=r[k];if(k==='forecast'||k==='agreed'||k==='entry'||k==='invoicedAt')return human(v);if(k==='value')return money(v);if(k==='status')return label(v);if(k==='situation')return badge(v,r.urgent?'late':'');return esc(v)}
-function sorting(arr){return arr.slice().sort(function(a,b){var x=normalize(a[sortKey]),y=normalize(b[sortKey]);if(['value','qty'].includes(sortKey)){x=Number(a[sortKey])||0;y=Number(b[sortKey])||0}return (x>y?1:x<y?-1:0)*(sortAsc?1:-1)})}
-function drawTable(arr){var tr=sorting(arr).map(function(r){return '<tr onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" style="cursor:pointer">'+FIELDS.map(function(f){return '<td'+(f[0]==='product'?' class="desc"':'')+'>'+cell(r,f[0])+'</td>'}).join('')+'</tr>'}).join('');
-$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Carteira consolidada do ERP CPS • clique em uma linha para detalhes</p></div>'+badge(arr.length+' itens')+'</div><div class="table-wrap"><table class="grid-table"><thead><tr>'+FIELDS.map(function(f){return '<th class="sortable" onclick="sortBy(\''+f[0]+'\')">'+esc(f[1])+(sortKey===f[0]?(sortAsc?' ▲':' ▼'):'')+'</th>'}).join('')+'</tr></thead><tbody>'+(tr||'<tr><td colspan="'+FIELDS.length+'">Nenhum registro encontrado.</td></tr>')+'</tbody></table></div><div class="table-bottom"><span>'+arr.length+' itens exibidos</span><span>Fonte: CPS /controle_fabrica/dados</span></div></section>'}
-function drawStatus(arr){var counts={};STATUS.concat(['SEM STATUS']).forEach(function(s){counts[s]=0});arr.forEach(function(r){counts[r.status]=(counts[r.status]||0)+1});var max=Math.max(1,...Object.values(counts));
-var bars=Object.keys(counts).map(function(s){return '<div class="sline"><span class="name">'+esc(s)+'</span><div class="track"><div class="fill" style="width:'+Math.round(counts[s]/max*100)+'%"></div></div><div class="val">'+counts[s]+'</div></div>'}).join('');
-$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>B. Gestão por Status</h2><p>Distribuição real dos itens por macroetapa</p></div></div><div class="status-lines">'+bars+'</div></section>'}
-function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' • '+esc(r.type)+' • '+esc(r.qty||'—')+' un.</p><div class="task-foot">'+badge(r.situation,r.urgent?'late':'')+'<button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Detalhes</button></div></article>'}
-function drawRoles(arr){$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2><p>Itens filtrados pelos status autorizados no CPS</p></div>'+badge(arr.length+' itens')+'</div><div class="role"><span class="role-caption">'+(profile.gestor?'GESTOR: todas as etapas':profile.roles.map(esc).join(' • '))+'</span></div><div class="queue">'+(sorting(arr).map(tile).join('')||'<div class="empty">Nenhum item autorizado para esses filtros.</div>')+'</div></section>'}
-function drawKanban(arr){var lanes=STATUS.map(function(s){var items=arr.filter(function(r){return r.status===s}),cards=sorting(items).map(function(r){return '<div draggable="true" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" class="mini-card '+(r.urgent?'overdue':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong> '+label(r.status)+'<span class="prod">'+esc(r.product)+'</span><div class="meta"><span>'+esc(r.client)+'</span><span>'+human(r.forecast)+'</span></div>'+(r.urgent?badge(r.situation,'late'):'')+'</div>'}).join('');
-return '<section class="lane" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropOn(event,\''+s+'\')"><div class="lane-head"><span>'+esc(s)+'</span><span class="lane-count">'+items.length+'</span></div>'+(cards||'<div class="empty">Sem itens</div>')+'</section>'}).join('');
-$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>D. Kanban</h2><p>Arraste para propor uma movimentação. <b>O status no CPS NÃO é alterado sem aprovação do gestor.</b></p></div>'+badge(arr.length+' cartões')+'</div><div class="kanban">'+lanes+'</div></section>'}
+
+function badge(s,kind){return '<span class="tag '+(kind||'')+'">'+esc(s)+'</span>'}
+function group(s){
+ s=normalize(s);if(s.includes('CONCLU'))return 'done';
+ if(s.includes('FATUR')||s.includes('EXPED'))return 'invoice';
+ if(s.includes('QUALI'))return 'qa';if(s.includes('COMPRA'))return 'buy';
+ if(s.includes('PCP')||s.includes('ENGENH'))return 'plan';
+ if(s.includes('PRODU'))return 'work';return 'other'
+}
+function label(s){return '<span class="pill '+group(s)+'">'+esc(s)+'</span>'}
+function metrics(arr){
+ var active=arr.filter(function(r){return !r.done}),late=active.filter(function(r){return r.urgent});
+ var k=[
+ ['Serviços / itens na visão',arr.length,'Registros disponíveis do CPS'],
+ ['Valor dos itens ativos',money(active.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0)),'Carteira de fabricação e serviços'],
+ ['Previsões vencidas',late.length,'Itens que exigem atenção'],
+ ['Expedição / Faturamento',active.filter(function(r){return ['EXPEDIÇÃO','FATURAMENTO'].includes(r.status)}).length,'Itens em etapa de saída']
+ ];
+ $('metrics').innerHTML=k.map(function(x){return '<article class="kpi"><div class="label">'+esc(x[0])+'</div><div class="num">'+esc(x[1])+'</div><div class="hint">'+esc(x[2])+'</div></article>'}).join('')
+}
+function cell(r,k){
+ var v=r[k];
+ if(k==='forecast')return '<span class="tag '+(r.urgent?'bad':'')+'">'+esc(human(v))+(r.urgent?' · Atenção':'')+'</span>';
+ if(['agreed','entry','invoicedAt'].includes(k))return esc(human(v));
+ if(k==='value')return money(v);
+ if(k==='status')return label(v);
+ if(k==='situation')return badge(v,r.urgent?'bad':'');
+ if(k==='obs')return '<span title="'+esc(v)+'">'+esc(String(v).slice(0,46))+'</span>';
+ if(k==='os')return '<strong>'+esc(v||'—')+'</strong>';
+ return esc(v===undefined||v===null||v===''?'—':v)
+}
+function sorting(arr){return arr.slice().sort(function(a,b){
+ var x=a[sortKey],y=b[sortKey];
+ if(['value','qty'].includes(sortKey)){x=Number(x)||0;y=Number(y)||0;return(x-y)*(sortAsc?1:-1)}
+ return String(x==null?'':x).localeCompare(String(y==null?'':y),'pt-BR',{numeric:true})*(sortAsc?1:-1)
+})}
+function drawTable(arr){
+ var sorted=sorting(arr);
+ var head='<tr>'+FIELDS.map(function(f){return '<th><button onclick="sortBy('+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">'+esc(f[1])+' '+(sortKey===f[0]?(sortAsc?'↑':'↓'):'↕')+'</button></th>'}).join('')+'<th>DETALHE</th></tr>';
+ var body=sorted.map(function(r){return '<tr>'+FIELDS.map(function(f){return '<td class="'+(f[0]==='product'?'desc':'')+'">'+cell(r,f[0])+'</td>'}).join('')+'<td><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></td></tr>'}).join('');
+ var total=sorted.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0);
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Grade completa • colunas A a Q • clique para ordenar ou abrir o serviço</p></div><div class="panel-actions"><button class="btn small" onclick="exportCSV()">↓ Exportar CSV</button><span class="tag">'+sorted.length+' itens</span></div></div><div class="table-wrap"><table class="grid-table"><thead>'+head+'</thead><tbody>'+(body||'<tr><td colspan="'+(FIELDS.length+1)+'"><div class="empty">Nenhum registro encontrado.</div></td></tr>')+'</tbody></table></div><div class="table-bottom"><span>Deslize horizontalmente para visualizar as 17 colunas.</span><strong>Total da seleção: '+money(total)+'</strong></div></section>'
+}
+function drawStatus(arr){
+ var groups=['plan','buy','work','qa','invoice','done','other'],
+ colors=['#5377af','#dca34d','#3c9a80','#936fb1','#cd6672','#809d46','#9aa5b2'],
+ groupNames=['PCP / Engenharia','Compras','Produção','Qualidade','Expedição / Faturamento','Concluído','Demais'];
+ var map={};arr.forEach(function(r){var x=map[r.status]||(map[r.status]={count:0,value:0});x.count++;x.value+=Number(String(r.value).replace(',','.'))||0});
+ var rank=Object.entries(map).sort(function(a,b){return b[1].count-a[1].count}),max=Math.max(1,...rank.map(function(x){return x[1].count}));
+ var counts=groups.map(function(g){return arr.filter(function(r){return group(r.status)===g}).length});
+ var total=Math.max(1,counts.reduce(function(a,b){return a+b},0)),at=0;
+ var conic=counts.map(function(n,i){var st=at;at+=n/total*360;return colors[i]+' '+st+'deg '+at+'deg'}).join(',');
+ var bars=rank.map(function(x){return '<div class="sline"><span class="name">'+esc(x[0])+'</span><div class="track"><div class="fill" style="width:'+Math.round(x[1].count/max*100)+'%"></div></div><div class="val">'+x[1].count+'</div></div>'}).join('');
+ var legends=groups.map(function(g,i){return '<span><i style="background:'+colors[i]+'"></i>'+groupNames[i]+' · '+counts[i]+'</span>'}).join('');
+ var maxValue=Math.max(1,...rank.map(function(x){return x[1].value}));
+ var moneyBars=rank.map(function(x){return '<div class="sline" style="grid-template-columns:180px 1fr 130px"><span class="name">'+esc(x[0])+'</span><div class="track"><div class="fill" style="background:#4979a8;width:'+Math.round(x[1].value/maxValue*100)+'%"></div></div><div class="val">'+money(x[1].value)+'</div></div>'}).join('');
+ $('screen').innerHTML='<section class="split"><div class="panel"><div class="panel-head"><div><h2>B. Distribuição por status</h2><p>Quantidade de itens por etapa operacional</p></div></div><div class="status-lines">'+(bars||'<div class="empty">Sem itens.</div>')+'</div></div><div class="panel"><div class="panel-head"><div><h2>Carteira por macroetapa</h2><p>Distribuição visual do mesmo conjunto de OS</p></div></div><div class="donutbox"><div class="donut" style="background:conic-gradient('+conic+')"><strong>'+arr.length+'</strong></div><div class="legend">'+legends+'</div></div></div></section><section class="panel"><div class="panel-head"><div><h2>Valor por status</h2><p>Valor dos itens agrupado por status no CPS</p></div></div><div style="padding:12px 20px;overflow-x:auto">'+(moneyBars||'<div class="empty">Sem valores.</div>')+'</div></section>'
+}
+function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p><div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Ver / movimentar</button></div>'+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
+function drawRoles(arr){$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2><p>Fila de trabalho conforme as liberações do usuário no CPS</p></div><span class="tag">'+arr.length+' disponíveis</span></div><div class="role"><div class="field"><label>Usuário / setor autorizado</label><div class="role-caption">'+(profile.gestor?'GESTOR • TODAS AS ETAPAS':profile.roles.map(esc).join(' • '))+'</div></div><div class="role-note">Exibindo apenas os itens cujo status está autorizado para o seu usuário. O gestor pode acompanhar todas as etapas.</div></div><div class="role-list">'+(sorting(arr).map(tile).join('')||'<div class="empty">Não há ordens neste status com os filtros selecionados.</div>')+'</div></section>'}
+function drawKanban(arr){
+ var lanes=STATUS.map(function(s){var items=arr.filter(function(r){return r.status===s});
+ var cards=sorting(items).map(function(r){return '<div draggable="true" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" class="mini-card '+(r.urgent?'overdue':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong><span class="prod">'+esc(r.product)+'</span><div class="meta"><span>'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+(r.urgent?badge(r.situation,'bad'):'')+'</div>'}).join('');
+ return '<section class="lane" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropOn(event,'+JSON.stringify(s).replace(/"/g,'&quot;')+')"><div class="lane-head"><span>'+esc(s)+'</span><span class="lane-count">'+items.length+'</span></div>'+ (cards||'<div class="empty">Sem cartões</div>')+'</section>'}).join('');
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>D. Gestão visual em cartões</h2><p>Estilo Kanban / Trello • arraste para solicitar a mudança de etapa. O CPS só é alterado após aprovação.</p></div><span class="tag">Aprovação do gestor</span></div><div class="kanban">'+lanes+'</div></section>'
+}
 function drawApprovals(){if(!profile.gestor)return;var cards=pending.map(function(p){var id=p.id||p.codigo,os=p.os||p.n_os||'Item',de=p.status_anterior||p.origem||'',para=p.status_novo||p.destino||'',autor=p.usuario||p.solicitante||'',at=p.criado_em||p.data||'';
 return '<article class="task"><div class="task-head"><strong>'+esc(os)+'</strong>'+badge('Aguardando gestor','pending')+'</div><h3>'+esc(de)+' → '+esc(para)+'</h3><p>Solicitante: '+esc(autor)+'<br>Registro: '+esc(at)+'</p><div class="inline-actions"><button class="btn primary small" onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',true)">Aprovar</button><button class="btn small" onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',false)">Rejeitar</button></div></article>'}).join('');
-$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>Solicitações de movimentação</h2><p>Nenhuma alteração é aplicada ao CPS antes da aprovação.</p></div><button class="btn small" onclick="loadApprovals()">Atualizar solicitações</button></div><div class="queue">'+(cards||'<div class="empty">Nenhuma solicitação pendente.</div>')+'</div></section>'}
+$('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>Solicitações de movimentação</h2><p>Nenhuma alteração é aplicada ao CPS antes da aprovação.</p></div><button class="btn small" onclick="loadApprovals()">Atualizar solicitações</button></div><div class="role-list">'+(cards||'<div class="empty">Nenhuma solicitação pendente.</div>')+'</div></section>'}
 function render(){if(!profile)return;var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
 if(view==='fabric')drawTable(arr);else if(view==='status')drawStatus(arr);else if(view==='roles')drawRoles(arr);else if(view==='kanban')drawKanban(arr);else drawApprovals()}
 function changeView(v){if(!profile)return;if(!profile.gestor&&['fabric','status','approval'].includes(v))return;view=v;['fabric','status','roles','kanban','approval'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===v)});render()}window.changeView=changeView;
