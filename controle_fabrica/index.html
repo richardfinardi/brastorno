@@ -407,8 +407,17 @@ return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico
 function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus))})}
 function filtered(exceptKey){var q=normalize($('q').value),type=multiSelections.type,status=multiSelections.status,per=multiSelections.period,releaseFrom=$('releaseFrom').value,releaseTo=$('releaseTo').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
 return visibleRows().filter(function(r){if(type.size&&!type.has(r.type))return false;if(status.size&&!status.has(r.status))return false;
-if(per==='late'&&!r.urgent)return false;if(per==='noos'&&!r.noOS)return false;if(per==='closed'&&!r.done)return false;
-if(per==='soon'&&!(r.forecast>=TODAY&&r.forecast<=new Date(Date.now()+30*86400000).toISOString().slice(0,10)))return false;
+if(per.size){
+ var ate=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+ var okPrevisao=Array.from(per).some(function(p){
+  if(p==='Vencidos / urgentes')return r.urgent;
+  if(p==='Próximos 30 dias')return r.forecast>=TODAY&&r.forecast<=ate;
+  if(p==='Orçamentos sem OS')return r.noOS;
+  if(p==='Concluídos')return r.done;
+  return false
+ });
+ if(!okPrevisao)return false
+}
 if(releaseFrom&&(!r.forecast||r.forecast<releaseFrom))return false;
 if(releaseTo&&(!r.forecast||r.forecast>releaseTo))return false;
 var hay=q?normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JSON.stringify(r.raw)):'';
@@ -418,7 +427,7 @@ function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</o
 function setupFilters(){var vis=visibleRows();['type','status'].forEach(function(k){
  multiOptions[k]=Array.from(new Set(vis.map(function(r){return r[k]}).concat(Array.from(multiSelections[k])))).filter(Boolean).sort(function(a,b){return a.localeCompare(b,'pt-BR')});
  renderMulti(k)
-})}
+});renderMulti('period')}
 function multiVisible(k){var q=normalize($(k+'Search').value);return multiOptions[k].filter(function(v){return normalize(v).includes(q)})}
 function renderMulti(k){
  var chosen=multiSelections[k],vals=multiVisible(k),selected=Array.from(chosen);
@@ -675,7 +684,7 @@ function sortBy(k){if(sortKey===k)sortAsc=!sortAsc;else {sortKey=k;sortAsc=true}
 function advancedToggle(){$('advanced').classList.toggle('open')}window.advancedToggle=advancedToggle;
 function addColumnFilter(){var v=$('columnValue').value.trim();if(v){extraFilters.push({k:$('columnSelect').value,v:v});$('columnValue').value='';render()}}window.addColumnFilter=addColumnFilter;
 function removeFilter(i){extraFilters.splice(i,1);render()}window.removeFilter=removeFilter;
-function clearFilters(){closeExcelFilter();multiClose();multiSelections.type.clear();multiSelections.status.clear();renderMulti('type');renderMulti('status');$('q').value='';$('periodFilter').value='';$('releaseFrom').value='';$('releaseTo').value='';extraFilters=[];pageIndex=1;render()}window.clearFilters=clearFilters;
+function clearFilters(){closeExcelFilter();multiClose();multiSelections.type.clear();multiSelections.status.clear();multiSelections.period.clear();renderMulti('type');renderMulti('status');renderMulti('period');$('q').value='';$('releaseFrom').value='';$('releaseTo').value='';extraFilters=[];pageIndex=1;render()}window.clearFilters=clearFilters;
 function toggleFilters(force){
  if(typeof force==='boolean')filtersCollapsed=force;else filtersCollapsed=!filtersCollapsed;
  var b=$('filtersBody');if(b)b.classList.toggle('hidden',filtersCollapsed);
@@ -996,7 +1005,7 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;multiSelections.type.clear();multiSelections.status.clear()}
+   if(changed){rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;multiSelections.type.clear();multiSelections.status.clear();multiSelections.period.clear()}
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
