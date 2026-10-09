@@ -90,6 +90,35 @@ def _consulta_sql():
             return arquivo.read_text(encoding="utf-8-sig")
     raise HTTPException(status_code=503, detail="controle_fabrica.sql não localizado na pasta SQL")
 
+def _consulta_sql_historico():
+    """Consulta de histórico guardada fora de sql/, sem endpoint automático público."""
+    arquivo = Path(__file__).resolve().with_name("controle_fabrica_historico.sql")
+    if not arquivo.is_file():
+        raise HTTPException(status_code=503, detail="Arquivo de histórico não instalado ao lado do módulo da API.")
+    return arquivo.read_text(encoding="utf-8-sig")
+
+
+@router.get("/historico")
+def consultar_historico(response: Response, usuario: str = Depends(obter_usuario_logado)):
+    """Histórico somente para U_GESTOR. Consulta separada evita carregar finalizados na abertura."""
+    perfil = permissoes_do_usuario(usuario)
+    if not perfil["U_GESTOR"]:
+        raise HTTPException(status_code=403, detail="Histórico permitido somente para o gestor.")
+    conn = get_conn()
+    try:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(_consulta_sql_historico())
+            colunas = [d[0] for d in cursor.description]
+            dados = [dict(zip(colunas, linha)) for linha in cursor.fetchall()]
+        finally:
+            cursor.close()
+    finally:
+        conn.close()
+    response.headers["Cache-Control"] = "no-store, private"
+    return jsonable_encoder({"dados": dados, "total": len(dados)})
+
+
 @router.get("/dados")
 def consultar_dados(response: Response, usuario: str = Depends(obter_usuario_logado)):
     perfil = permissoes_do_usuario(usuario)
