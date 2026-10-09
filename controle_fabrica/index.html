@@ -250,7 +250,7 @@ function applyRows(raw,stamp,fromCache){
  applyPendingVisuals();
  hasData=true;cacheStamp=stamp||Date.now();setupFilters();
  $('updated').textContent=rows.length+' itens • '+new Date(cacheStamp).toLocaleString('pt-BR');
- cacheLabel(fromCache?'Dados salvos • atualizando…':'Atualizado',fromCache?'loading':'');
+ cacheLabel(fromCache?'Atualizando…':'Atualizado',fromCache?'loading':'');
  render();
  if(!fromCache)setNotice('')
 }
@@ -295,7 +295,7 @@ function metrics(arr){
  var active=arr.filter(function(r){return !r.done}),late=active.filter(function(r){return r.urgent});
  var k=[
  ['Serviços / itens na visão',arr.length,'Registros disponíveis do CPS'],
- ['Valor dos itens ativos',money(active.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0)),'Carteira de fabricação e serviços'],
+ ['Valor dos itens ativos',money(active.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0)),'Serviços em andamento'],
  ['Previsões vencidas',late.length,'Itens que exigem atenção'],
  ['Expedição / Faturamento',active.filter(function(r){return ['EXPEDIÇÃO','FATURAMENTO'].includes(r.status)}).length,'Itens em etapa de saída']
  ];
