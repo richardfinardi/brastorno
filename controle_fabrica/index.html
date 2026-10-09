@@ -111,6 +111,40 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .log-preview{max-height:150px;overflow:auto;white-space:pre-wrap;background:#f5f7fa;border:1px solid #e4e9f0;border-radius:9px;padding:10px;font:11px/1.5 Consolas,monospace;color:#59677b}
 @media(max-width:1100px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.kpi{padding:8px}.kpi .num{font-size:17px}}
 @media(max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.edit-section .cols{grid-template-columns:1fr}.updated-block{display:none}}
+
+/* Grade Excel: largura travada, strings longas sempre contidas na célula */
+.grid-table{table-layout:fixed;width:2675px;min-width:2675px;border-spacing:0}
+.grid-table td,.grid-table th{max-width:unset;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grid-table td.desc{white-space:nowrap;max-width:unset;min-width:0}
+.grid-table .clip-cell{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.grid-table td:nth-child(1),.grid-table th:nth-child(1){width:120px;min-width:120px;max-width:120px;left:0}
+.grid-table td:nth-child(2),.grid-table th:nth-child(2){width:255px;min-width:255px;max-width:255px;left:120px}
+.grid-table th:nth-child(5),.grid-table td:nth-child(5){min-width:0}
+.grid-table th:nth-child(12),.grid-table td:nth-child(12){min-width:0}
+.grid-table th:nth-child(15),.grid-table td:nth-child(15){min-width:0}
+.grid-table thead tr:first-child th{top:0;z-index:8;padding:6px 8px}
+.grid-table thead tr:first-child th:nth-child(-n+2){z-index:11}
+.grid-table td{padding:7px 8px;height:38px}
+.col-heading{display:flex;align-items:center;gap:3px;min-width:0}
+.col-heading .col-sort{overflow:hidden;text-overflow:ellipsis;flex:1;text-align:left;white-space:nowrap;padding:4px 0}
+.col-heading .col-filter{flex:none;border:1px solid transparent;border-radius:5px;background:transparent;color:#66758c;cursor:pointer;font-size:11px;line-height:1;padding:6px 5px}
+.col-heading .col-filter:hover,.col-heading .col-filter.active{color:#59752b;border-color:#b9d098;background:#e7f1d9}
+.excel-filter{position:fixed;z-index:120;min-width:300px;width:338px;max-width:calc(100vw - 20px);max-height:min(520px,calc(100vh - 32px));background:white;box-shadow:0 15px 45px #14244645;border:1px solid #d9e2ec;border-radius:13px;display:flex;flex-direction:column;overflow:hidden;color:#23334d;font-size:12px}
+.excel-filter.hidden{display:none!important}
+.excel-filter-head{padding:12px 13px 9px;border-bottom:1px solid #e8edf3;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.excel-filter-head strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.excel-filter-search{margin:9px 12px 7px!important;width:calc(100% - 24px)!important;height:34px!important;border:1px solid #dce3eb;border-radius:8px;padding:6px 10px;font-size:12px}
+.excel-filter-checkall{padding:8px 14px;border-bottom:1px solid #eef0f4;font-weight:750;display:flex;align-items:center;gap:9px;cursor:pointer}
+.excel-filter-checkall input{accent-color:#708e34}
+.excel-filter-options{flex:1;min-height:60px;max-height:290px;overflow-y:auto;padding:3px 7px}
+.excel-filter-option{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:7px;cursor:pointer;min-width:0}
+.excel-filter-option:hover{background:#f1f5e9}
+.excel-filter-option input{accent-color:#708e34;flex:none}
+.excel-filter-option span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.excel-filter-summary{font-size:10px;color:#6b7b92;padding:4px 14px}
+.excel-filter-foot{padding:10px 12px;border-top:1px solid #e8edf3;display:flex;gap:7px;justify-content:flex-end;background:#fafbfd}
+.excel-filter-foot button{padding:7px 10px;border-radius:7px;font-weight:750;font-size:11px}
+@media(max-width:620px){.excel-filter{max-width:calc(100vw - 12px)}}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -139,6 +173,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <main id="screen"><div class="skel">Conectando à API…</div></main>
 
 </div>
+<div id="excelFilterPopup" class="excel-filter hidden" role="dialog" aria-label="Filtro da coluna" onclick="event.stopPropagation()"></div>
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
 <div class="modal" role="dialog" aria-modal="true"><div class="modalhead"><h2 id="modalTitle">Detalhes do item</h2><button class="btn small" onclick="closeModal()">Fechar ✕</button></div>
 <div class="modalbody" id="modalBody"></div><div class="modalfoot"><button class="btn" onclick="closeModal()">Fechar</button><button class="btn primary hidden" id="btnSaveModal" onclick="saveModal()">Salvar alterações</button></div></div></div>
@@ -152,6 +187,7 @@ var codeStatus={6:'ENGENHARIA',7:'PCP',8:'COMPRAS',9:'PRODUÇÃO',10:'QUALIDADE'
 var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['month','MÊS'],['year','ANO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
 var cacheKey='',cacheStamp=0,lastRefreshAt=0,fetchingData=null,hasData=false,initializing=null;
 var CACHE_NAME='brastorno_fabrica_cache_v3',CACHE_TABLE='snapshots',CACHE_SCHEMA=3;
+var excelKey=null,excelValues=[],excelSelected=new Set(),excelSearch='',excelPopupOpen=false;
 var baseRows=[],pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
@@ -272,13 +308,13 @@ else if(!situation){situation=isDone?'ENCERRADO':'DENTRO DO PROGRAMADO'}
 var id=String(read(raw,['guid_linha','id','codigo_item','cod_os','codigo'])||'')+'|'+os+'|'+quote+'|'+i;
 return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:String(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
 function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus))})}
-function filtered(){var q=normalize($('q').value),type=$('typeFilter').value,status=$('statusFilter').value,per=$('periodFilter').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
+function filtered(exceptKey){var q=normalize($('q').value),type=$('typeFilter').value,status=$('statusFilter').value,per=$('periodFilter').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
 return visibleRows().filter(function(r){if(type&&r.type!==type)return false;if(status&&r.status!==status)return false;
 if(per==='late'&&!r.urgent)return false;if(per==='noos'&&!r.noOS)return false;if(per==='closed'&&!r.done)return false;
 if(per==='soon'&&!(r.forecast>=TODAY&&r.forecast<=new Date(Date.now()+30*86400000).toISOString().slice(0,10)))return false;
 var hay=q?normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JSON.stringify(r.raw)):'';
 if(tokens.some(function(t){var exclude=t[0]==='-';var term=normalize(t.replace(/^[+-]/,'').replace(/^"|"$/g,''));return term&&(exclude?hay.includes(term):!hay.includes(term))}))return false;
-return extraFilters.every(function(f){var val=String(r[f.k]==null?'':r[f.k]);if(['entry','agreed','forecast','invoicedAt'].includes(f.k))val+=' '+human(r[f.k]);if(f.k==='value')val+=' '+money(r.value);return normalize(val).includes(normalize(f.v))})})}
+return extraFilters.every(function(f){if(f.k===exceptKey)return true;var val=String(r[f.k]==null?'':r[f.k]);if(Array.isArray(f.values))return f.values.includes(val);if(['entry','agreed','forecast','invoicedAt'].includes(f.k))val+=' '+human(r[f.k]);if(f.k==='value')val+=' '+money(r.value);return normalize(val).includes(normalize(f.v))})})}
 function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</option>'+Array.from(new Set(values)).filter(Boolean).sort().map(function(v){return '<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
 function setupFilters(){var vis=visibleRows();setSelect('typeFilter',vis.map(function(x){return x.type}),$('typeFilter').value);setSelect('statusFilter',vis.map(function(x){return x.status}),$('statusFilter').value)}
 
@@ -325,23 +361,85 @@ function rowEditable(r,k){
    return '<span class="cell-edit">'+out+' <button class="row-edit" title="Alterar '+(k==='type'?'tipo':'previsão')+'" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+','+JSON.stringify(k).replace(/"/g,'&quot;')+')">✎</button></span>'
  }
  if(k==='status'&&r.pending)return out+' <span class="pending-badge">Aguardando aprovação</span>';
+ if(['client','product','obs','situation'].includes(k)){
+   return '<span class="clip-cell" title="'+esc(String(r[k]||''))+'">'+out+'</span>'
+ }
  return out
 }
 function drawTable(arr){
  var sorted=sorting(arr),n=sorted.length,pages=Math.max(1,Math.ceil(n/pageSize));
  pageIndex=Math.max(1,Math.min(pageIndex,pages));
  var first=(pageIndex-1)*pageSize,part=sorted.slice(first,first+pageSize);
- var head='<tr>'+FIELDS.map(function(f){return '<th><button onclick="sortBy('+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">'+esc(f[1])+' '+(sortKey===f[0]?(sortAsc?'↑':'↓'):'↕')+'</button></th>'}).join('')+'<th>DETALHE</th></tr>';
- var filt='<tr>'+FIELDS.map(function(f){var item=extraFilters.find(function(x){return x.k===f[0]});
- return '<th><input type="search" class="column-search" data-key="'+esc(f[0])+'" value="'+esc(item?item.v:'')+'" placeholder="Filtrar..." aria-label="Filtrar '+esc(f[1])+'" oninput="filterColumn(this)" onkeydown="event.stopPropagation()"></th>'
- }).join('')+'<th><button class="btn small" title="Limpar todos os filtros de coluna" onclick="clearColumnFilters()">Limpar</button></th></tr>';
+
+ var head='<tr>'+FIELDS.map(function(f){return '<th><div class="col-heading"><button class="col-sort" title="Ordenar '+esc(f[1])+'" onclick="sortBy('+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">'+esc(f[1])+' '+(sortKey===f[0]?(sortAsc?'↑':'↓'):'↕')+'</button><button class="col-filter '+(extraFilters.some(function(x){return x.k===f[0]})?'active':'')+'" aria-label="Filtrar '+esc(f[1])+'" title="Filtro como Excel" onclick="event.stopPropagation();openExcelFilter(event,'+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">▼</button></div></th>'}).join('')+'<th>DETALHE</th></tr>';
+ var colWidths=[120,255,115,100,270,85,125,135,125,130,145,200,75,75,165,110,130,95];
+ var colgroup='<colgroup>'+colWidths.map(function(w){return '<col style="width:'+w+'px">'}).join('')+'</colgroup>';
  var body=part.map(function(r){return '<tr onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" style="cursor:pointer">'+FIELDS.map(function(f){return '<td'+(f[0]==='product'?' class="desc"':'')+'>'+rowEditable(r,f[0])+'</td>'}).join('')+'<td><button class="action" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></td></tr>'}).join('');
  var total=sorted.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0);
  var pager='<div class="pager"><button onclick="changePage(1)" '+(pageIndex===1?'disabled':'')+'>«</button><button onclick="changePage('+(pageIndex-1)+')" '+(pageIndex===1?'disabled':'')+'>‹</button><strong>Página '+pageIndex+' / '+pages+'</strong><button onclick="changePage('+(pageIndex+1)+')" '+(pageIndex===pages?'disabled':'')+'>›</button><button onclick="changePage('+pages+')" '+(pageIndex===pages?'disabled':'')+'>»</button><select onchange="changePageSize(this.value)" aria-label="Itens por página"><option '+(pageSize===50?'selected':'')+'>50</option><option '+(pageSize===100?'selected':'')+'>100</option><option '+(pageSize===200?'selected':'')+'>200</option></select><span>'+n+' itens</span></div>';
  var old=$('screen').querySelector('.table-wrap'),x=old?old.scrollLeft:0,y=old?old.scrollTop:0;
- $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Grade completa • colunas A a Q • clique para ordenar ou abrir o serviço</p></div><div class="panel-actions"><button class="btn small" onclick="exportCSV()">↓ Exportar CSV</button><span class="tag">'+n+' itens</span></div></div><div class="table-wrap"><table class="grid-table"><thead>'+head+filt+'</thead><tbody>'+(body||'<tr><td colspan="'+(FIELDS.length+1)+'"><div class="empty">Nenhum registro encontrado.</div></td></tr>')+'</tbody></table></div><div class="table-bottom">'+pager+'<strong>Total: '+money(total)+'</strong></div></section>';
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Grade completa • colunas A a Q • clique para ordenar ou abrir o serviço</p></div><div class="panel-actions"><button class="btn small" onclick="exportCSV()">↓ Exportar CSV</button><span class="tag">'+n+' itens</span></div></div><div class="table-wrap"><table class="grid-table">'+colgroup+'<thead>'+head+'</thead><tbody>'+(body||'<tr><td colspan="'+(FIELDS.length+1)+'"><div class="empty">Nenhum registro encontrado.</div></td></tr>')+'</tbody></table></div><div class="table-bottom">'+pager+'<strong>Total: '+money(total)+'</strong></div></section>';
  var box=$('screen').querySelector('.table-wrap');if(box){box.scrollLeft=x;box.scrollTop=y}
 }
+
+/* Filtro de coluna tipo Excel, com seleção múltipla e pesquisa. */
+function excelColumnName(key){var v=FIELDS.find(function(f){return f[0]===key});return v?v[1]:key}
+function excelLabel(key,v){
+ if(v===''||v===null||v===undefined)return '(Em branco)';
+ if(['entry','agreed','forecast','invoicedAt'].includes(key))return human(v);
+ if(key==='value')return money(v);
+ return String(v)
+}
+function openExcelFilter(evt,key){
+ var pop=$('excelFilterPopup'),r=evt.currentTarget.getBoundingClientRect();
+ if(excelPopupOpen&&excelKey===key){closeExcelFilter();return}
+ excelKey=key;excelPopupOpen=true;excelSearch='';
+ var source=filtered(key),options=Array.from(new Set(source.map(function(row){return String(row[key]==null?'':row[key])})));
+ options.sort(function(a,b){return excelLabel(key,a).localeCompare(excelLabel(key,b),'pt-BR',{numeric:true})});
+ excelValues=options;
+ var stored=extraFilters.find(function(f){return f.k===key});
+ excelSelected=stored&&Array.isArray(stored.values)?new Set(stored.values.map(String)):
+    new Set(options.filter(function(x){return !stored||normalize(x).includes(normalize(stored.v))}));
+ pop.classList.remove('hidden');
+ pop.innerHTML='<div class="excel-filter-head"><strong>'+esc(excelColumnName(key))+'</strong><button class="btn small" onclick="closeExcelFilter()">✕</button></div>'+
+  '<input class="excel-filter-search" id="excelSearch" type="search" placeholder="Pesquisar valores..." oninput="excelSearchChange(this.value)">'+
+  '<label class="excel-filter-checkall"><input type="checkbox" id="excelCheckAll" onchange="excelToggleAll(this.checked)"> Selecionar tudo <span id="excelAllCount"></span></label>'+
+  '<div class="excel-filter-options" id="excelOptions"></div>'+
+  '<div class="excel-filter-summary" id="excelSummary"></div>'+
+  '<div class="excel-filter-foot"><button class="btn" onclick="excelClear()">Limpar filtro</button><button class="btn" onclick="closeExcelFilter()">Cancelar</button><button class="btn primary" onclick="excelApply()">Aplicar</button></div>';
+ var width=Math.min(338,window.innerWidth-20),left=Math.min(Math.max(10,r.left),Math.max(10,window.innerWidth-width-10));
+ var height=Math.min(480,window.innerHeight-24),top=r.bottom+8;
+ if(top+height>window.innerHeight-8)top=Math.max(8,r.top-height-8);
+ if(top+height>window.innerHeight-8)top=Math.max(8,window.innerHeight-height-8);
+ pop.style.left=left+'px';pop.style.top=top+'px';pop.style.width=width+'px';
+ renderExcelValues();
+ setTimeout(function(){var input=$('excelSearch');if(input)input.focus({preventScroll:true})},0)
+}
+window.openExcelFilter=openExcelFilter;
+function excelMatches(){var q=normalize(excelSearch);return !q?excelValues:excelValues.filter(function(x){return normalize(excelLabel(excelKey,x)).includes(q)})}
+function renderExcelValues(){
+ var list=$('excelOptions');if(!list||!excelPopupOpen)return;
+ var match=excelMatches(),subset=match.slice(0,180);
+ list.innerHTML=subset.map(function(v){
+  return '<label class="excel-filter-option" title="'+esc(excelLabel(excelKey,v))+'"><input type="checkbox" data-v="'+esc(v)+'" onchange="excelToggleOne(this)" '+(excelSelected.has(v)?'checked':'')+'><span>'+esc(excelLabel(excelKey,v))+'</span></label>'
+ }).join('')||(match.length?'<div class="empty">Nenhuma opção</div>':'<div class="empty">Nenhum valor encontrado</div>');
+ $('excelCheckAll').checked=match.length>0&&match.every(function(x){return excelSelected.has(x)});
+ $('excelCheckAll').indeterminate=match.some(function(x){return excelSelected.has(x)})&&!$('excelCheckAll').checked;
+ $('excelAllCount').textContent='('+match.length+')';
+ $('excelSummary').textContent=excelSelected.size+' selecionados • '+(match.length>180?'mostrando 180 de '+match.length+' (refine a pesquisa)':'')
+}
+function excelSearchChange(v){excelSearch=v;renderExcelValues()}window.excelSearchChange=excelSearchChange;
+function excelToggleOne(el){if(el.checked)excelSelected.add(el.dataset.v);else excelSelected.delete(el.dataset.v);renderExcelValues()}window.excelToggleOne=excelToggleOne;
+function excelToggleAll(yes){excelMatches().forEach(function(x){if(yes)excelSelected.add(x);else excelSelected.delete(x)});renderExcelValues()}window.excelToggleAll=excelToggleAll;
+function excelApply(){
+ extraFilters=extraFilters.filter(function(x){return x.k!==excelKey});
+ if(excelSelected.size!==excelValues.length)extraFilters.push({k:excelKey,values:Array.from(excelSelected)});
+ pageIndex=1;rolesLimit=100;closeExcelFilter();render()
+}
+window.excelApply=excelApply;
+function excelClear(){extraFilters=extraFilters.filter(function(x){return x.k!==excelKey});pageIndex=1;closeExcelFilter();render()}window.excelClear=excelClear;
+function closeExcelFilter(){excelPopupOpen=false;excelKey=null;var e=$('excelFilterPopup');if(e)e.classList.add('hidden')}window.closeExcelFilter=closeExcelFilter;
+document.addEventListener('pointerdown',function(e){if(!excelPopupOpen)return;var p=$('excelFilterPopup');if(p&&!p.contains(e.target)&&!e.target.closest('.col-filter'))closeExcelFilter()});
 function changePage(x){pageIndex=x;drawTable(filtered())}window.changePage=changePage;
 function changePageSize(n){pageSize=Number(n)||100;pageIndex=1;drawTable(filtered())}window.changePageSize=changePageSize;
 function clearColumnFilters(){extraFilters=[];pageIndex=1;rolesLimit=100;render()}window.clearColumnFilters=clearColumnFilters;
@@ -404,14 +502,14 @@ window.showMoreLane=showMoreLane;
 function drawApprovals(){if(!profile.gestor)return;var cards=pending.map(function(p){var id=p.id||p.codigo,os=p.os||p.n_os||'Item',de=p.status_anterior||p.origem||'',para=p.status_novo||p.destino||'',autor=p.usuario||p.solicitante||'',at=p.criado_em||p.data||'';
 return '<article class="task"><div class="task-head"><strong>'+esc(os)+'</strong>'+badge('Aguardando gestor','pending')+'</div><h3>'+esc(de)+' → '+esc(para)+'</h3><p>Solicitante: '+esc(autor)+'<br>Registro: '+esc(at)+'</p><div class="inline-actions"><button class="btn primary small" onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',true)">Aprovar</button><button class="btn small" onclick="decision('+JSON.stringify(id).replace(/"/g,'&quot;')+',false)">Rejeitar</button></div></article>'}).join('');
 $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>Solicitações de movimentação</h2><p>Nenhuma alteração é aplicada ao CPS antes da aprovação.</p></div><button class="btn small" onclick="loadApprovals()">Atualizar solicitações</button></div><div class="role-list">'+(cards||'<div class="empty">Nenhuma solicitação pendente.</div>')+'</div></section>'}
-function render(){if(!profile)return;var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
+function render(){if(!profile)return;var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(Array.isArray(f.values)?f.values.length+' selecionado(s)':f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
 if(view==='fabric')drawTable(arr);else if(view==='status')drawStatus(arr);else if(view==='roles')drawRoles(arr);else if(view==='kanban')drawKanban(arr);else drawApprovals()}
 function changeView(v){if(!profile)return;if(!profile.gestor&&['fabric','status','approval'].includes(v))return;view=v;['fabric','status','roles','kanban','approval'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===v)});render()}window.changeView=changeView;
 function sortBy(k){if(sortKey===k)sortAsc=!sortAsc;else {sortKey=k;sortAsc=true}pageIndex=1;render()}window.sortBy=sortBy;
 function advancedToggle(){$('advanced').classList.toggle('open')}window.advancedToggle=advancedToggle;
 function addColumnFilter(){var v=$('columnValue').value.trim();if(v){extraFilters.push({k:$('columnSelect').value,v:v});$('columnValue').value='';render()}}window.addColumnFilter=addColumnFilter;
 function removeFilter(i){extraFilters.splice(i,1);render()}window.removeFilter=removeFilter;
-function clearFilters(){$('q').value='';$('typeFilter').value='';$('statusFilter').value='';$('periodFilter').value='';extraFilters=[];pageIndex=1;render()}window.clearFilters=clearFilters;
+function clearFilters(){closeExcelFilter();$('q').value='';$('typeFilter').value='';$('statusFilter').value='';$('periodFilter').value='';extraFilters=[];pageIndex=1;render()}window.clearFilters=clearFilters;
 function toggleFilters(force){
  if(typeof force==='boolean')filtersCollapsed=force;else filtersCollapsed=!filtersCollapsed;
  var b=$('filtersBody');if(b)b.classList.toggle('hidden',filtersCollapsed);
