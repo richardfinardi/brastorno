@@ -119,9 +119,68 @@ function date(v){if(v===undefined||v===null||v==='')return '';var s=String(v).tr
 function human(s){if(!s)return '—';return s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4)}
 function money(v){var n=Number(String(v==null?0:v).replace(',','.'));return (isFinite(n)?n:0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
 function validToken(){var t=localStorage.getItem('brastorno_token');if(!t){location.href='./login.html';return ''}try{var p=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if(p.exp&&Date.now()>=p.exp*1000){logout();return ''}}catch(e){}return t}
-function logout(){localStorage.removeItem('brastorno_token');localStorage.removeItem('brastorno_usuario_nome');location.href='./login.html'}window.logout=logout;
+function logout(){if(cacheKey)removeSnapshot(cacheKey);localStorage.removeItem('brastorno_token');localStorage.removeItem('brastorno_usuario_nome');location.href='./login.html'}window.logout=logout;
 async function api(path,options){var token=validToken();if(!token)throw Error('Sessão não iniciada.');var o=Object.assign({cache:'no-store',headers:{}},options||{});o.headers=Object.assign({'Authorization':'Bearer '+token,'Accept':'application/json'},o.headers||{});var res=await fetch(API+path,o);if(res.status===401){logout();throw Error('Sessão expirada.')}var val;try{val=await res.json()}catch(e){val=null}if(!res.ok){var err=Error((val&&val.detail)||('HTTP '+res.status));err.status=res.status;throw err}return val}
-function setNotice(msg,kind){$('notice').textContent=msg;$('notice').className='notice'+(kind?' '+kind:'')}
+
+function setNotice(msg,kind){
+ $('notice').textContent=msg;
+ $('notice').className='notice'+(kind?' '+kind:'');
+ $('notice').classList.toggle('hidden',!msg)
+}
+function cacheLabel(msg,kind){
+ var el=$('cacheState');if(!el)return;
+ el.textContent=msg;el.className='cache-state'+(kind?' '+kind:'')
+}
+function cacheId(p){
+ return CACHE_SCHEMA+'|'+normalize(p.name)+'|'+(p.gestor?'GESTOR':p.roles.slice().sort().join(','))
+}
+function openCache(){
+ return new Promise(function(resolve,reject){
+  if(!('indexedDB' in window)){reject(Error('Cache não suportado'));return}
+  var req=indexedDB.open(CACHE_NAME,1);
+  req.onupgradeneeded=function(){var db=req.result;if(!db.objectStoreNames.contains(CACHE_TABLE))db.createObjectStore(CACHE_TABLE)};
+  req.onsuccess=function(){resolve(req.result)};
+  req.onerror=function(){reject(req.error||Error('Cache indisponível'))}
+ })
+}
+async function readSnapshot(key){
+ var db=await openCache();
+ try{return await new Promise(function(resolve,reject){
+  var req=db.transaction(CACHE_TABLE,'readonly').objectStore(CACHE_TABLE).get(key);
+  req.onsuccess=function(){resolve(req.result||null)};
+  req.onerror=function(){reject(req.error||Error('Falha leitura do cache'))}
+ })}finally{db.close()}
+}
+async function saveSnapshot(key,raw,stamp){
+ if(!key||!Array.isArray(raw))return;
+ var db=await openCache();
+ try{await new Promise(function(resolve,reject){
+  var tr=db.transaction(CACHE_TABLE,'readwrite');
+  tr.oncomplete=function(){resolve()};tr.onerror=function(){reject(tr.error)};
+  tr.objectStore(CACHE_TABLE).put({stamp:stamp,raw:raw,version:CACHE_SCHEMA},key)
+ })}finally{db.close()}
+}
+async function removeSnapshot(key){
+ if(!key)return;
+ try{
+  var db=await openCache();
+  try{await new Promise(function(resolve,reject){
+   var tr=db.transaction(CACHE_TABLE,'readwrite');
+   tr.oncomplete=function(){resolve()};tr.onerror=function(){reject(tr.error)};
+   tr.objectStore(CACHE_TABLE).delete(key)
+  })}finally{db.close()}
+ }catch(e){}
+}
+function applyRows(raw,stamp,fromCache){
+ if(!profile||!Array.isArray(raw))return;
+ rows=raw.map(normalizeItem);hasData=true;cacheStamp=stamp||Date.now();
+ setupFilters();
+ $('updated').textContent=rows.length+' itens • '+new Date(cacheStamp).toLocaleString('pt-BR');
+ cacheLabel(fromCache?'Dados salvos • atualizando…':'Dados atualizados agora',fromCache?'loading':'');
+ render();
+ setNotice(fromCache?'Exibindo os últimos dados salvos. Atualizando o CPS em segundo plano.':'',fromCache?'ok':'')
+}
+
 function parseProfile(p){var src=(p&&p.permissoes)||p&&p.permissions||p||{};var gestor=truthy(read(src,['U_GESTOR','gestor']));var roles=STATUS.filter(function(s){return PERMS[s]&&truthy(read(src,[PERMS[s]]))});return {gestor:gestor,roles:roles,name:read(p,['usuario','nome','username'])||localStorage.getItem('brastorno_usuario_nome')||'USUÁRIO'}}
 function flattenResult(v){if(Array.isArray(v))return v;if(!v||typeof v!=='object')return [];for(var i=0;i<['dados','data','resultado','resultados','itens','items','rows','registros','records'].length;i++){var x=read(v,[['dados','data','resultado','resultados','itens','items','rows','registros','records'][i]]);if(Array.isArray(x))return x;if(x&&typeof x==='object'){var y=flattenResult(x);if(y.length)return y}}return []}
 function statusOf(raw){var n=Number(read(raw,['cod_status','status_codigo','codigo_status']));if(codeStatus[n])return codeStatus[n];var s=normalize(read(raw,['status_servico','status_os','status','fase']));if(s.includes('ENGENH'))return 'ENGENHARIA';if(s.includes('PCP'))return 'PCP';if(s.includes('COMPRA'))return 'COMPRAS';if(s.includes('PRODU'))return 'PRODUÇÃO';if(s.includes('QUALI'))return 'QUALIDADE';if(s.includes('FATUR'))return 'FATURAMENTO';if(s.includes('EXPED'))return 'EXPEDIÇÃO';if(s.includes('CONCLU'))return 'CONCLUÍDO';if(s.includes('PARALIS'))return 'PARALISADO';if(s.includes('CANCEL'))return 'CANCELADO';return 'SEM STATUS'}
@@ -246,18 +305,99 @@ catch(err){setNotice(err.status===404||err.status===405?'O fluxo de solicitaçã
 async function loadApprovals(){if(!profile||!profile.gestor)return;try{pending=flattenResult(await api('/controle_fabrica/solicitacoes?status=PENDENTE'));$('approvalCount').textContent=pending.length?'('+pending.length+')':'';if(view==='approval')drawApprovals()}
 catch(err){pending=[];$('approvalCount').textContent='';if(view==='approval'){drawApprovals();setNotice('Consulta de aprovações não disponível na API: '+err.message,'warn')}}}window.loadApprovals=loadApprovals;
 async function decision(id,approve){if(!confirm((approve?'Aprovar e aplicar':'Rejeitar')+' esta solicitação?'))return;
-try{await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(id)+'/'+(approve?'aprovar':'rejeitar'),{method:'POST'});await loadApprovals();await loadData();setNotice('Solicitação '+(approve?'aprovada':'rejeitada')+' com sucesso.','ok')}
+try{await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(id)+'/'+(approve?'aprovar':'rejeitar'),{method:'POST'});await loadApprovals();await loadData({force:true});setNotice('Solicitação '+(approve?'aprovada':'rejeitada')+' com sucesso.','ok')}
 catch(err){setNotice('A operação não foi confirmada pela API: '+err.message,'error')}}window.decision=decision;
-async function loadData(){var data=await api('/controle_fabrica/dados?_t='+Date.now());var raw=flattenResult(data);if(!Array.isArray(raw))throw Error('Formato inesperado da API');rows=raw.map(normalizeItem);setupFilters();$('updated').textContent=rows.length+' registros recebidos • '+new Date().toLocaleString('pt-BR');render();
-setNotice('Dados carregados do CPS. '+(profile.gestor?'Acesso completo do gestor.':'Visão limitada aos status autorizados.')+' Movimentações dependem de aprovação.','ok')}
-async function loadAll(){if(!validToken())return;try{setNotice('Validando permissões do usuário no CPS…');var p=await api('/controle_fabrica/perfil');profile=parseProfile(p);
-if(!profile.gestor&&!profile.roles.length)throw Error('Seu usuário não possui liberação para visualizar este controle.');
-$('userName').textContent=profile.name;$('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
-$('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
-$('tab-fabric').classList.toggle('hidden',!profile.gestor);$('tab-status').classList.toggle('hidden',!profile.gestor);
-$('tab-approval').classList.toggle('hidden',!profile.gestor);changeView(profile.gestor?'fabric':'roles');await loadData();if(profile.gestor)await loadApprovals();
-}catch(err){if(!profile){setNotice(err.status===404?'É necessário ativar a rota autenticada /controle_fabrica/perfil na API para liberar o controle por setor. A tela já está publicada, mas o acesso aos dados foi bloqueado por segurança.':err.message,'error');$('screen').innerHTML='<div class="skel">Aguardando validação de permissões pelo servidor.</div>'}
-else{setNotice('Falha ao carregar dados: '+err.message,'error');$('screen').innerHTML='<div class="skel">Não foi possível ler a API. Utilize Atualizar para tentar novamente.</div>'}}}window.loadAll=loadAll;
+
+async function loadData(options){
+ options=options||{};
+ if(fetchingData){
+  if(options.force)await fetchingData;
+  else return fetchingData
+ }
+ if(!profile||!cacheKey)return;
+ cacheLabel('Atualizando em segundo plano…','loading');
+ fetchingData=(async function(){
+  try{
+   var data=await api('/controle_fabrica/dados?_t='+Date.now());
+   var raw=flattenResult(data);
+   if(!Array.isArray(raw))throw Error('Resposta inesperada da API');
+   var stamp=Date.now();lastRefreshAt=stamp;
+   applyRows(raw,stamp,false);
+   saveSnapshot(cacheKey,raw,stamp).catch(function(e){console.warn('Cache do navegador indisponível:',e)});
+  }catch(err){
+   console.warn('Falha de atualização do Controle de Fábrica:',err);
+   if(err.status===403){
+    if(cacheKey)removeSnapshot(cacheKey);
+    rows=[];profile=null;hasData=false;cacheKey='';
+    $('tabs').classList.add('hidden');$('metrics').classList.add('hidden');$('filterPanel').classList.add('hidden');
+    $('screen').innerHTML='<div class="skel">Acesso ao Controle de Fábrica não autorizado.</div>';
+    setNotice('Seu acesso foi revogado ou está sem liberação no CPS.','error');
+    cacheLabel('Acesso não autorizado','warn');return
+   }
+   if(hasData){
+    cacheLabel('Últimos dados salvos • falha ao atualizar','warn');
+    setNotice('Não foi possível atualizar agora. Os dados salvos continuam disponíveis. '+err.message,'warn')
+   }else{
+    cacheLabel('Falha na conexão','warn');
+    setNotice('Não foi possível carregar dados do CPS: '+err.message,'error');
+    $('screen').innerHTML='<div class="skel">Falha na conexão. Clique em Atualizar para tentar novamente.</div>'
+   }
+  }finally{fetchingData=null}
+ })();
+ return fetchingData
+}
+async function loadAll(){
+ if(initializing)return initializing;
+ if(!validToken())return;
+ initializing=(async function(){
+  try{
+   if(!hasData)setNotice('Validando permissões do usuário no CPS…');
+   var p=await api('/controle_fabrica/perfil'),freshProfile=parseProfile(p);
+   if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
+   var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
+   profile=freshProfile;cacheKey=newKey;
+   if(changed){rows=[];hasData=false;cacheStamp=0}
+   $('userName').textContent=profile.name;
+   $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
+   $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
+   $('tab-fabric').classList.toggle('hidden',!profile.gestor);
+   $('tab-status').classList.toggle('hidden',!profile.gestor);
+   $('tab-approval').classList.toggle('hidden',!profile.gestor);
+   if(!hasData){
+    view=profile.gestor?'fabric':'roles';
+    ['fabric','status','roles','kanban','approval'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===view)});
+    cacheLabel('Procurando dados salvos…','loading');
+    try{
+     var snapshot=await readSnapshot(cacheKey);
+     if(snapshot&&snapshot.version===CACHE_SCHEMA&&Array.isArray(snapshot.raw)){
+      applyRows(snapshot.raw,snapshot.stamp||Date.now(),true)
+     }
+    }catch(err){console.warn('Falha de leitura do cache:',err)}
+   }else render();
+   if(!hasData)$('screen').innerHTML='<div class="skel">Carregando dados do CPS pela primeira vez…<br>Na próxima visita, os dados salvos abrirão imediatamente.</div>';
+   // Inicia atualização sem bloquear a interface nem apagar os dados salvos.
+   loadData({silent:true});
+   if(profile.gestor)loadApprovals();
+  }catch(err){
+   // Não exibe qualquer dado local se as permissões não forem validadas.
+   profile=null;hasData=false;rows=[];cacheKey='';
+   $('tabs').classList.add('hidden');$('metrics').classList.add('hidden');$('filterPanel').classList.add('hidden');
+   setNotice(err.status===404?'Rota de perfil não disponível na API.':err.message,'error');
+   cacheLabel('Acesso não validado','warn');
+   $('screen').innerHTML='<div class="skel">Não foi possível validar as permissões.</div>'
+  }finally{initializing=null}
+ })();
+ return initializing
+}
+window.loadAll=loadAll;
+function refreshWhenActive(){
+ if(!profile||!cacheKey||fetchingData||document.hidden)return;
+ if(Date.now()-lastRefreshAt<60000)return;
+ loadData({silent:true})
+}
+setInterval(refreshWhenActive,180000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)refreshWhenActive()});
+window.addEventListener('focus',refreshWhenActive);
 ['q','typeFilter','statusFilter','periodFilter'].forEach(function(id){$(id).addEventListener('input',render)});
 $('columnValue').addEventListener('keydown',function(e){if(e.key==='Enter')addColumnFilter()});document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()});
 loadAll();
