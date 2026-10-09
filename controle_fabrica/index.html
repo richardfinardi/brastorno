@@ -159,7 +159,7 @@ var $=function(x){return document.getElementById(x)};
 function esc(s){return String(s===null||s===undefined?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]})}
 function normalize(s){return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim()}
 function truthy(v){return [true,1,'1','S','SIM','TRUE','T','YES','Y'].indexOf(typeof v==='string'?v.toUpperCase().trim():v)>=0}
-function read(o,names){if(!o||typeof o!=='object')return '';var d={};Object.keys(o).forEach(function(k){d[normalize(k).replace(/[^A-Z0-9]/g,'')]=o[k]});for(var i=0;i<names.length;i++){var v=d[normalize(names[i]).replace(/[^A-Z0-9]/g,'')];if(v!==undefined&&v!==null&&v!=='')return v}return ''}
+function read(o,names){if(!o||typeof o!=='object')return '';var d=readCache.get(o);if(!d){d={};Object.keys(o).forEach(function(k){d[normalize(k).replace(/[^A-Z0-9]/g,'')]=o[k]});readCache.set(o,d)}for(var i=0;i<names.length;i++){var v=d[normalize(names[i]).replace(/[^A-Z0-9]/g,'')];if(v!==undefined&&v!==null&&v!=='')return v}return ''}
 function date(v){if(v===undefined||v===null||v==='')return '';var s=String(v).trim();if(s==='NaT'||s==='None'||s==='null')return '';if(/^\d{4}-\d\d-\d\d/.test(s))return s.slice(0,10);if(/^\d\d\/\d\d\/\d{4}/.test(s)){var p=s.slice(0,10).split('/');return p[2]+'-'+p[1]+'-'+p[0]}return ''}
 function human(s){if(!s)return '—';return s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4)}
 function money(v){var n=Number(String(v==null?0:v).replace(',','.'));return (isFinite(n)?n:0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
@@ -243,17 +243,16 @@ else if(!isDone&&agreed&&forecast&&forecast>agreed){situation='PREVISÃO ACIMA D
 else if(!situation){situation=isDone?'ENCERRADO':'DENTRO DO PROGRAMADO'}
 var id=String(read(raw,['guid_linha','id','codigo_item','cod_os','codigo'])||'')+'|'+os+'|'+quote+'|'+i;
 return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:String(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
-function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.indexOf(r.status)>=0})}
+function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus))})}
 function filtered(){var q=normalize($('q').value),type=$('typeFilter').value,status=$('statusFilter').value,per=$('periodFilter').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
 return visibleRows().filter(function(r){if(type&&r.type!==type)return false;if(status&&r.status!==status)return false;
 if(per==='late'&&!r.urgent)return false;if(per==='noos'&&!r.noOS)return false;if(per==='closed'&&!r.done)return false;
 if(per==='soon'&&!(r.forecast>=TODAY&&r.forecast<=new Date(Date.now()+30*86400000).toISOString().slice(0,10)))return false;
-var hay=normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JSON.stringify(r.raw));
+var hay=q?normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JSON.stringify(r.raw)):'';
 if(tokens.some(function(t){var exclude=t[0]==='-';var term=normalize(t.replace(/^[+-]/,'').replace(/^"|"$/g,''));return term&&(exclude?hay.includes(term):!hay.includes(term))}))return false;
 return extraFilters.every(function(f){return normalize(r[f.k]).includes(normalize(f.v))})})}
 function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</option>'+Array.from(new Set(values)).filter(Boolean).sort().map(function(v){return '<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
-function setupFilters(){var vis=visibleRows();setSelect('typeFilter',vis.map(function(x){return x.type}),$('typeFilter').value);setSelect('statusFilter',vis.map(function(x){return x.status}),$('statusFilter').value);
-$('columnSelect').innerHTML=FIELDS.map(function(f){return '<option value="'+f[0]+'">'+f[1]+'</option>'}).join('')}
+function setupFilters(){var vis=visibleRows();setSelect('typeFilter',vis.map(function(x){return x.type}),$('typeFilter').value);setSelect('statusFilter',vis.map(function(x){return x.status}),$('statusFilter').value)}
 
 function badge(s,kind){return '<span class="tag '+(kind||'')+'">'+esc(s)+'</span>'}
 function group(s){
@@ -290,13 +289,47 @@ function sorting(arr){return arr.slice().sort(function(a,b){
  if(['value','qty'].includes(sortKey)){x=Number(x)||0;y=Number(y)||0;return(x-y)*(sortAsc?1:-1)}
  return String(x==null?'':x).localeCompare(String(y==null?'':y),'pt-BR',{numeric:true})*(sortAsc?1:-1)
 })}
-function drawTable(arr){
- var sorted=sorting(arr);
- var head='<tr>'+FIELDS.map(function(f){return '<th><button onclick="sortBy('+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">'+esc(f[1])+' '+(sortKey===f[0]?(sortAsc?'↑':'↓'):'↕')+'</button></th>'}).join('')+'<th>DETALHE</th></tr>';
- var body=sorted.map(function(r){return '<tr>'+FIELDS.map(function(f){return '<td class="'+(f[0]==='product'?'desc':'')+'">'+cell(r,f[0])+'</td>'}).join('')+'<td><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></td></tr>'}).join('');
- var total=sorted.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0);
- $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Grade completa • colunas A a Q • clique para ordenar ou abrir o serviço</p></div><div class="panel-actions"><button class="btn small" onclick="exportCSV()">↓ Exportar CSV</button><span class="tag">'+sorted.length+' itens</span></div></div><div class="table-wrap"><table class="grid-table"><thead>'+head+'</thead><tbody>'+(body||'<tr><td colspan="'+(FIELDS.length+1)+'"><div class="empty">Nenhum registro encontrado.</div></td></tr>')+'</tbody></table></div><div class="table-bottom"><span>Deslize horizontalmente para visualizar as 17 colunas.</span><strong>Total da seleção: '+money(total)+'</strong></div></section>'
+
+function rowEditable(r,k){
+ var can=profile&&profile.gestor&&osCode(r);
+ var out=cell(r,k);
+ if((k==='type'||k==='forecast')&&can){
+   return '<span class="cell-edit">'+out+' <button class="row-edit" title="Alterar '+(k==='type'?'tipo':'previsão')+'" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+','+JSON.stringify(k).replace(/"/g,'&quot;')+')">✎</button></span>'
+ }
+ if(k==='status'&&r.pending)return out+' <span class="pending-badge">Aguardando aprovação</span>';
+ return out
 }
+function drawTable(arr){
+ var sorted=sorting(arr),n=sorted.length,pages=Math.max(1,Math.ceil(n/pageSize));
+ pageIndex=Math.max(1,Math.min(pageIndex,pages));
+ var first=(pageIndex-1)*pageSize,part=sorted.slice(first,first+pageSize);
+ var head='<tr>'+FIELDS.map(function(f){return '<th><button onclick="sortBy('+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">'+esc(f[1])+' '+(sortKey===f[0]?(sortAsc?'↑':'↓'):'↕')+'</button></th>'}).join('')+'<th>DETALHE</th></tr>';
+ var filt='<tr>'+FIELDS.map(function(f){var item=extraFilters.find(function(x){return x.k===f[0]});
+ return '<th><input type="search" class="column-search" data-key="'+esc(f[0])+'" value="'+esc(item?item.v:'')+'" placeholder="Filtrar..." aria-label="Filtrar '+esc(f[1])+'" oninput="filterColumn(this)" onkeydown="event.stopPropagation()"></th>'
+ }).join('')+'<th><button class="btn small" title="Limpar todos os filtros de coluna" onclick="clearColumnFilters()">Limpar</button></th></tr>';
+ var body=part.map(function(r){return '<tr onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" style="cursor:pointer">'+FIELDS.map(function(f){return '<td'+(f[0]==='product'?' class="desc"':'')+'>'+rowEditable(r,f[0])+'</td>'}).join('')+'<td><button class="action" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></td></tr>'}).join('');
+ var total=sorted.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0);
+ var pager='<div class="pager"><button onclick="changePage(1)" '+(pageIndex===1?'disabled':'')+'>«</button><button onclick="changePage('+(pageIndex-1)+')" '+(pageIndex===1?'disabled':'')+'>‹</button><strong>Página '+pageIndex+' / '+pages+'</strong><button onclick="changePage('+(pageIndex+1)+')" '+(pageIndex===pages?'disabled':'')+'>›</button><button onclick="changePage('+pages+')" '+(pageIndex===pages?'disabled':'')+'>»</button><select onchange="changePageSize(this.value)" aria-label="Itens por página"><option '+(pageSize===50?'selected':'')+'>50</option><option '+(pageSize===100?'selected':'')+'>100</option><option '+(pageSize===200?'selected':'')+'>200</option></select><span>'+n+' itens</span></div>';
+ var old=$('screen').querySelector('.table-wrap'),x=old?old.scrollLeft:0,y=old?old.scrollTop:0;
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Grade completa • colunas A a Q • clique para ordenar ou abrir o serviço</p></div><div class="panel-actions"><button class="btn small" onclick="exportCSV()">↓ Exportar CSV</button><span class="tag">'+n+' itens</span></div></div><div class="table-wrap"><table class="grid-table"><thead>'+head+filt+'</thead><tbody>'+(body||'<tr><td colspan="'+(FIELDS.length+1)+'"><div class="empty">Nenhum registro encontrado.</div></td></tr>')+'</tbody></table></div><div class="table-bottom">'+pager+'<strong>Total: '+money(total)+'</strong></div></section>';
+ var box=$('screen').querySelector('.table-wrap');if(box){box.scrollLeft=x;box.scrollTop=y}
+}
+function changePage(x){pageIndex=x;drawTable(filtered())}window.changePage=changePage;
+function changePageSize(n){pageSize=Number(n)||100;pageIndex=1;drawTable(filtered())}window.changePageSize=changePageSize;
+function clearColumnFilters(){extraFilters=[];pageIndex=1;render()}window.clearColumnFilters=clearColumnFilters;
+function filterColumn(el){
+ var key=el.dataset.key,value=el.value,caret=el.selectionStart,scroll=el.closest('.table-wrap'),scrollLeft=scroll?scroll.scrollLeft:0;
+ clearTimeout(columnFilterTimer);
+ // O cabeçalho permanece editável mesmo após a grade ser redesenhada.
+ columnFilterTimer=setTimeout(function(){
+  extraFilters=extraFilters.filter(function(f){return f.k!==key});
+  if(value.trim())extraFilters.push({k:key,v:value.trim()});
+  pageIndex=1;render();
+  var box=$('screen').querySelector('.table-wrap'),input=$('screen').querySelector('.column-search[data-key="'+key+'"]');
+  if(box)box.scrollLeft=scrollLeft;
+  if(input){input.focus({preventScroll:true});try{input.setSelectionRange(caret,caret)}catch(e){}}
+ },220)
+}window.filterColumn=filterColumn;
 function drawStatus(arr){
  var groups=['plan','buy','work','qa','invoice','done','other'],
  colors=['#5377af','#dca34d','#3c9a80','#936fb1','#cd6672','#809d46','#9aa5b2'],
@@ -326,11 +359,17 @@ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>S
 function render(){if(!profile)return;var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
 if(view==='fabric')drawTable(arr);else if(view==='status')drawStatus(arr);else if(view==='roles')drawRoles(arr);else if(view==='kanban')drawKanban(arr);else drawApprovals()}
 function changeView(v){if(!profile)return;if(!profile.gestor&&['fabric','status','approval'].includes(v))return;view=v;['fabric','status','roles','kanban','approval'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===v)});render()}window.changeView=changeView;
-function sortBy(k){if(sortKey===k)sortAsc=!sortAsc;else {sortKey=k;sortAsc=true}render()}window.sortBy=sortBy;
+function sortBy(k){if(sortKey===k)sortAsc=!sortAsc;else {sortKey=k;sortAsc=true}pageIndex=1;render()}window.sortBy=sortBy;
 function advancedToggle(){$('advanced').classList.toggle('open')}window.advancedToggle=advancedToggle;
 function addColumnFilter(){var v=$('columnValue').value.trim();if(v){extraFilters.push({k:$('columnSelect').value,v:v});$('columnValue').value='';render()}}window.addColumnFilter=addColumnFilter;
 function removeFilter(i){extraFilters.splice(i,1);render()}window.removeFilter=removeFilter;
-function clearFilters(){$('q').value='';$('typeFilter').value='';$('statusFilter').value='';$('periodFilter').value='';extraFilters=[];render()}window.clearFilters=clearFilters;
+function clearFilters(){$('q').value='';$('typeFilter').value='';$('statusFilter').value='';$('periodFilter').value='';extraFilters=[];pageIndex=1;render()}window.clearFilters=clearFilters;
+function toggleFilters(force){
+ if(typeof force==='boolean')filtersCollapsed=force;else filtersCollapsed=!filtersCollapsed;
+ var b=$('filtersBody');if(b)b.classList.toggle('hidden',filtersCollapsed);
+ var btn=$('toggleFiltersBtn');if(btn)btn.textContent=filtersCollapsed?'▾ Mostrar filtros':'▴ Recolher filtros';
+ try{localStorage.setItem('brastorno_filtros_recolhidos',filtersCollapsed?'1':'0')}catch(e){}
+}window.toggleFilters=toggleFilters;
 function exportCSV(){var arr=filtered(),matrix=[FIELDS.map(function(f){return f[1]})].concat(arr.map(function(r){return FIELDS.map(function(f){return f[0]==='situation'?r.situation:r[f[0]]||''})}));var csv='\ufeff'+matrix.map(function(a){return a.map(function(x){return '"'+String(x).replace(/"/g,'""')+'"'}).join(';')}).join('\r\n');
 var a=document.createElement('a'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.href=url;a.download='brastorno_controle_fabrica.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url)},1000)}window.exportCSV=exportCSV;
 function openModal(id){var r=rows.find(function(x){return x.id===id});if(!r)return;selected=r;$('modalTitle').textContent=(r.os||r.quote||'Item')+' • Controle de Fábrica';
@@ -443,8 +482,9 @@ function refreshWhenActive(){
 setInterval(refreshWhenActive,180000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden)refreshWhenActive()});
 window.addEventListener('focus',refreshWhenActive);
-['q','typeFilter','statusFilter','periodFilter'].forEach(function(id){$(id).addEventListener('input',render)});
+['q','typeFilter','statusFilter','periodFilter'].forEach(function(id){$(id).addEventListener('input',function(){pageIndex=1;render()})});
 $('columnValue').addEventListener('keydown',function(e){if(e.key==='Enter')addColumnFilter()});document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()});
+try{toggleFilters(localStorage.getItem('brastorno_filtros_recolhidos')==='1')}catch(e){}
 loadAll();
 })();
 </script></body></html>
