@@ -324,7 +324,11 @@ async function loadPending(){
 }
 function applyRows(raw,stamp,fromCache){
  if(!profile||!Array.isArray(raw))return;
- baseRows=raw.map(normalizeItem);
+ // Só itens com ação pendente: mantemos OS concluída com orçamento não faturado,
+// que normalizeItem já classifica como FATURAMENTO.
+baseRows=raw.map(normalizeItem).filter(function(r){
+ return !['FATURADO','CONCLUÍDO','CANCELADO'].includes(r.status)
+});
  applyPendingVisuals();
  hasData=true;cacheStamp=stamp||Date.now();setupFilters();
  $('updated').textContent=rows.length+' itens • '+new Date(cacheStamp).toLocaleString('pt-BR');
