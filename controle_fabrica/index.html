@@ -596,7 +596,8 @@ function drawRoles(arr){
 }
 function moreRoles(){rolesLimit+=100;drawRoles(filtered())}window.moreRoles=moreRoles;
 function drawKanban(arr){
- var lanes=STATUS.map(function(s){
+ var finais=['CONCLUÍDO','FATURADO','CANCELADO'];
+ var lanes=STATUS.filter(function(s){return !finais.includes(s)||(showHistory&&profile&&profile.gestor)}).map(function(s){
   var items=sorting(arr.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
@@ -921,6 +922,31 @@ function decision(id,approve){return runApprovalBatch([String(id)],approve)}
 window.decision=decision;
 
 
+async function toggleHistory(checked){
+ if(!profile||!profile.gestor){showHistory=false;$('showHistory').checked=false;return}
+ if(!checked){
+  showHistory=false;
+  multiSelections.status.delete('CONCLUÍDO');multiSelections.status.delete('FATURADO');
+  applyPendingVisuals();setupFilters();pageIndex=1;render();setNotice('');return
+ }
+ showHistory=true;
+ if(historyLoaded){applyPendingVisuals();setupFilters();pageIndex=1;render();return}
+ if(historyLoading)return historyLoading;
+ $('showHistory').disabled=true;
+ setNotice('Consultando concluídos e faturados no histórico…','warn');
+ historyLoading=(async function(){
+  try{
+   var response=await api('/controle_fabrica/historico?_t='+Date.now());
+   historyRows=flattenResult(response).map(normalizeItem).filter(function(r){return ['CONCLUÍDO','FATURADO'].includes(r.status)});
+   historyLoaded=true;applyPendingVisuals();setupFilters();pageIndex=1;render();setNotice('')
+  }catch(e){
+   showHistory=false;$('showHistory').checked=false;
+   setNotice('Não foi possível consultar o histórico: '+e.message+'. Atualize o módulo da API e o SQL de histórico.','error')
+  }finally{$('showHistory').disabled=false;historyLoading=null}
+ })();
+ return historyLoading
+}
+window.toggleHistory=toggleHistory;
 async function loadData(options){
  options=options||{};
  if(fetchingData){
@@ -970,13 +996,14 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){rows=[];baseRows=[];pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false}
+   if(changed){rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;multiSelections.type.clear();multiSelections.status.clear()}
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
    $('tab-fabric').classList.toggle('hidden',!profile.gestor);
    $('tab-status').classList.toggle('hidden',!profile.gestor);
    $('tab-approval').classList.toggle('hidden',!profile.gestor);
+ $('historyControl').classList.toggle('hidden',!profile.gestor);$('showHistory').checked=showHistory&&profile.gestor;
    if(!hasData){
     view=profile.gestor?'fabric':'roles';
     ['fabric','status','roles','kanban','approval'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===view)});
