@@ -43,28 +43,53 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .brand-copy small{font-size:11px;display:block}
 @media(max-width:980px){.partner-brand-logo{width:148px}.client-brand-logo{width:155px}.brand{gap:12px}.brand-copy strong{font-size:12px}}
 @media(max-width:620px){.head{padding:12px;gap:10px}.brand{gap:9px}.client-brand-logo{width:134px}.partner-brand-logo{width:130px}.brand-divider{height:26px}.brand-copy small{font-size:9px}.brand-copy strong{font-size:11px}.head-right{width:100%;justify-content:flex-end}.desktop-divider{display:none}}
+/* Controle de fábrica segue o design da DEMO */
+.queue,.role-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:15px}
+.queue .task,.role-list .task{border:1px solid #e4e9f0;border-radius:12px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:9px}
+.queue .task h3,.role-list .task h3{font-size:13px;margin:0;color:var(--navy)}
+.queue .task p,.role-list .task p{font-size:11px;color:var(--muted);margin:0}
+.task-foot{margin-top:auto}
+.kanban{grid-template-columns:repeat(10,minmax(215px,1fr));gap:12px;overflow-x:auto;padding:16px;align-items:start}
+.lane{min-width:215px;min-height:360px;padding:10px;background:#f1f4f8}
+.mini-card{padding:12px;margin-bottom:9px;border:1px solid #dce3eb;background:#fff;border-radius:10px;box-shadow:0 2px 8px #00000008;cursor:grab}
+.mini-card .meta{display:flex;justify-content:space-between;gap:7px;color:#7b889b;font-size:10px}
+.mini-card .prod{font-size:11px;color:#586980;line-height:1.3;margin-bottom:8px;display:block}
+.pill{font-size:10px;white-space:nowrap;border-radius:7px;border:1px solid transparent;padding:5px 8px;font-weight:850;display:inline-block}
+.pill.plan{background:#eaf0ff;color:#3560a8;border-color:#d7e2fc}
+.pill.buy{background:#fff4df;color:#986216;border-color:#f1deb2}
+.pill.work{background:#e8f4f0;color:#2c7e6d;border-color:#cbe7dd}
+.pill.qa{background:#efeafb;color:#7756a7;border-color:#ddd2f4}
+.pill.invoice{background:#fcebed;color:#a84f5b;border-color:#f4d4db}
+.pill.done{background:#edf4e4;color:#66802e;border-color:#d9e6c6}
+.pill.other{background:#eef1f5;color:#6d7890;border-color:#dee5ec}
+.updated-block{text-align:right;min-width:200px}
+.cache-state{display:inline-flex;align-items:center;border:1px solid #dce6d5;background:#f0f5e8;padding:5px 10px;border-radius:999px;margin-top:6px;color:#55732e;font-size:11px;font-weight:800}
+.cache-state.loading{background:#e9f0fa;border-color:#c8d9ef;color:#426d9f}
+.cache-state.warn{background:#fff5e3;border-color:#efd7a2;color:#916217}
+.grid-table td.desc{max-width:370px;white-space:normal}.grid-table .tag.bad{background:#fff0ef;color:#c7514c}
+@media(max-width:720px){.queue,.role-list{grid-template-columns:1fr}.updated-block{text-align:left;margin-top:8px}.kanban{grid-template-columns:repeat(10,225px)}}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>ERP CPS • Ambiente integrado v1.2</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
 <button class="btn ghost small" id="reloadBtn" onclick="loadAll()">↻ Atualizar</button><button class="btn ghost small" onclick="logout()">Sair</button></div></div></header>
 <div class="wrap">
 <section class="hero"><div><div class="eyebrow">Gestão industrial • ERP CPS</div><h1>Controle de Fábrica</h1>
-<div class="subtitle">Carteira de fabricação e serviços, situações de prazo, fila por setor e movimentações controladas por aprovação.</div></div><div id="updated" class="subtitle">—</div></section>
+<div class="subtitle">Quatro visões conectadas para acompanhar carteira, programação, andamento, responsabilidades e faturamento.</div></div><div class="subtitle updated-block"><div id="updated">Carregando dados</div><span id="cacheState" class="cache-state loading">Conectando…</span></div></section>
 <div id="notice" class="notice">Validando o acesso ao Controle de Fábrica…</div>
 <nav class="tabs hidden" id="tabs" aria-label="Telas do controle">
 <button class="tab active" id="tab-fabric" onclick="changeView('fabric')"><em>A.</em> Gestão de Fábrica</button>
 <button class="tab" id="tab-status" onclick="changeView('status')"><em>B.</em> Gestão por Status</button>
 <button class="tab" id="tab-roles" onclick="changeView('roles')"><em>C.</em> Controle por Status</button>
-<button class="tab" id="tab-kanban" onclick="changeView('kanban')"><em>D.</em> Kanban</button>
+<button class="tab" id="tab-kanban" onclick="changeView('kanban')"><em>D.</em> Cartões / Kanban</button>
 <button class="tab hidden" id="tab-approval" onclick="changeView('approval')">✓ Aprovações <span id="approvalCount"></span></button></nav>
 <div class="kpis hidden" id="metrics"></div>
 <section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquisa e filtros sincronizados entre as abas e o Kanban.</p></div>
 <div class="panel-actions"><button class="btn small" onclick="advancedToggle()">☷ Filtro por coluna</button><button class="btn small" onclick="clearFilters()">Limpar filtros</button><button class="btn small" onclick="exportCSV()">↓ CSV</button></div></div>
-<div class="filters"><div class="field search"><label>Pesquisa geral</label><input id="q" placeholder="OS, cliente, produto, orçamento, NF, observação…"></div>
+<div class="filters"><div class="field search"><label>Pesquisa geral dinâmica</label><input id="q" placeholder="OS, cliente, produto, orçamento, NF, observação…"></div>
 <div class="field"><label>Tipo</label><select id="typeFilter"><option value="">Todos</option></select></div>
 <div class="field"><label>Status</label><select id="statusFilter"><option value="">Todos</option></select></div>
-<div class="field"><label>Prazo</label><select id="periodFilter"><option value="">Todos</option><option value="late">Vencidos / urgentes</option><option value="soon">Próximos 30 dias</option><option value="noos">Orçamentos sem OS</option><option value="closed">Concluídos</option></select></div></div>
-<div class="filter-box" id="advanced"><div class="field"><label>Coluna</label><select id="columnSelect"></select></div>
+<div class="field"><label>Previsão</label><select id="periodFilter"><option value="">Todos</option><option value="late">Vencidos / urgentes</option><option value="soon">Próximos 30 dias</option><option value="noos">Orçamentos sem OS</option><option value="closed">Concluídos</option></select></div></div>
+<div class="search-help">Dica: use <b>+britador -concluído</b> para incluir "britador" e excluir "concluído". Os filtros por coluna podem ser combinados.</div><div class="filter-box" id="advanced"><div class="field"><label>Coluna</label><select id="columnSelect"></select></div>
 <div class="field" style="flex:2"><label>Contém</label><input id="columnValue" placeholder="Texto a localizar"></div>
 <button class="btn primary" onclick="addColumnFilter()">Adicionar</button></div><div class="chips" id="chips"></div></section>
 <main id="screen"><div class="skel">Conectando à API…</div></main>
@@ -80,7 +105,9 @@ var API='https://brastorno.consultoriarf.net';
 var STATUS=['ENGENHARIA','PCP','COMPRAS','PRODUÇÃO','QUALIDADE','FATURAMENTO','EXPEDIÇÃO','CONCLUÍDO','PARALISADO','CANCELADO'];
 var PERMS={'ENGENHARIA':'U_ENG','PCP':'U_PCP','COMPRAS':'U_COMPRAS','PRODUÇÃO':'U_PROD','QUALIDADE':'U_CQ','FATURAMENTO':'U_FAT','EXPEDIÇÃO':'U_EXP'};
 var codeStatus={6:'ENGENHARIA',7:'PCP',8:'COMPRAS',9:'PRODUÇÃO',10:'QUALIDADE',11:'FATURAMENTO',12:'EXPEDIÇÃO',13:'CONCLUÍDO',14:'PARALISADO',15:'CANCELADO'};
-var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
+var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['month','MÊS'],['year','ANO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
+var cacheKey='',cacheStamp=0,lastRefreshAt=0,fetchingData=null,hasData=false,initializing=null;
+var CACHE_NAME='brastorno_fabrica_cache_v3',CACHE_TABLE='snapshots',CACHE_SCHEMA=3;
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
 var $=function(x){return document.getElementById(x)};
@@ -111,7 +138,7 @@ else if(!isDone&&((agreed&&agreed<=TODAY)||(forecast&&forecast<=TODAY))){situati
 else if(!isDone&&agreed&&forecast&&forecast>agreed){situation='PREVISÃO ACIMA DO ACORDADO';urgent=true}
 else if(!situation){situation=isDone?'ENCERRADO':'DENTRO DO PROGRAMADO'}
 var id=String(read(raw,['guid_linha','id','codigo_item','cod_os','codigo'])||'')+'|'+os+'|'+quote+'|'+i;
-return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,obs:String(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
+return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:String(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
 function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.indexOf(r.status)>=0})}
 function filtered(){var q=normalize($('q').value),type=$('typeFilter').value,status=$('statusFilter').value,per=$('periodFilter').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
 return visibleRows().filter(function(r){if(type&&r.type!==type)return false;if(status&&r.status!==status)return false;
