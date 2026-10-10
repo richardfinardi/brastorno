@@ -204,6 +204,31 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 
 .kanban-move{width:100%;margin-top:10px;padding:7px 10px;border-radius:8px;border:1px solid #d6e2cf;background:#f5f9f0;color:#4b6b32;font-size:11px;font-weight:800;cursor:pointer}
 .kanban-move:focus{outline:2px solid #88a951;outline-offset:1px}
+/* Primeira coluna: seleção múltipla */
+.fabric-bulk-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 14px;border-bottom:1px solid #dfe6ef;background:#f7faf4}
+.fabric-bulk-toolbar strong{font-size:12px;color:#40572d;margin-right:auto}
+.fabric-bulk-toolbar button{font-size:11px;padding:7px 10px}
+.fabric-bulk-toolbar button:disabled{opacity:.5;cursor:not-allowed}
+.grid-table.with-selection{width:2503px;min-width:2503px}
+.grid-table.with-selection .select-col{width:48px!important;min-width:48px!important;max-width:48px!important;padding:5px;text-align:center;position:sticky!important;left:0!important;background:#f4f7fa;z-index:10}
+.grid-table.with-selection tbody .select-col{background:white;z-index:9}
+.grid-table.with-selection .select-col input{accent-color:#708e34;width:16px;height:16px;cursor:pointer}
+.grid-table.with-selection th:nth-child(2),.grid-table.with-selection td:nth-child(2){width:120px!important;min-width:120px!important;max-width:120px!important;position:sticky;left:48px!important;z-index:7}
+.grid-table.with-selection th:nth-child(3),.grid-table.with-selection td:nth-child(3){width:255px!important;min-width:255px!important;max-width:255px!important;position:sticky;left:168px!important;z-index:7}
+.grid-table.with-selection thead th:nth-child(-n+3){z-index:16!important;background:#edf2f7}
+.grid-table.with-selection tbody tr.selected-row td{background:#eff6e7!important}
+.grid-table.with-selection tbody tr.selected-row:hover td{background:#e9f1dc!important}
+.bulk-overlay{position:fixed;inset:0;background:#101b32a3;z-index:150;display:flex;align-items:center;justify-content:center;padding:16px}
+.bulk-dialog{background:white;border-radius:16px;box-shadow:0 24px 70px #0003;width:min(560px,96vw);max-height:94vh;overflow:hidden;display:flex;flex-direction:column}
+.bulk-head,.bulk-footer{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid #e3e8f0}
+.bulk-head h2{font-size:17px;margin:0;flex:1}.bulk-footer{border-bottom:0;border-top:1px solid #e3e8f0;justify-content:flex-end}
+.bulk-body{overflow-y:auto;padding:17px;display:grid;gap:16px}
+.bulk-body .field{min-width:0}.bulk-body select{width:100%}
+.bulk-body .field small{color:#738198;font-size:11px}
+.bulk-summary{padding:12px;background:#f1f5ec;border:1px solid #dbe7cd;border-radius:11px;display:flex;flex-direction:column;gap:4px}
+.bulk-summary strong{font-size:15px}.bulk-summary span{font-size:12px}
+.bulk-summary small{font-size:11px;color:#637689;overflow-wrap:anywhere}
+.bulk-progress{font-size:12px;color:#54647c;background:#f8fafc;padding:10px;border-radius:9px;overflow-wrap:anywhere}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -232,6 +257,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <main id="screen"><div class="skel">Conectando à API…</div></main>
 
 </div>
+<div id="bulkOverlay" class="bulk-overlay hidden" onclick="if(event.target===this)closeBulk()"><div class="bulk-dialog" role="dialog" aria-modal="true" aria-labelledby="bulkTitle"><div class="bulk-head"><h2 id="bulkTitle">Alteração em lote</h2><button class="btn small" onclick="closeBulk()">✕</button></div><div id="bulkBody" class="bulk-body"></div><div class="bulk-footer"><button class="btn" id="bulkCloseBtn" onclick="closeBulk()">Fechar</button><button class="btn primary" id="bulkApplyBtn" onclick="applyBulk()">Aplicar alterações</button></div></div></div>
 <div id="excelFilterPopup" class="excel-filter hidden" role="dialog" aria-label="Filtro da coluna" onclick="event.stopPropagation()"></div>
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
 <div class="modal" role="dialog" aria-modal="true"><div class="modalhead"><h2 id="modalTitle">Detalhes do item</h2><button class="btn small" onclick="closeModal()">Fechar ✕</button></div>
@@ -248,6 +274,7 @@ var cacheKey='',cacheStamp=0,lastRefreshAt=0,fetchingData=null,hasData=false,ini
 var CACHE_NAME='brastorno_fabrica_cache_v3',CACHE_TABLE='snapshots',CACHE_SCHEMA=3;
 var excelKey=null,excelValues=[],excelSelected=new Set(),excelSearch='',excelPopupOpen=false;
 var selectedApprovalIds=new Set(),approvalBusy=false;
+var selectedFabricRows=new Set(),bulkBusy=false,bulkStop=false;
 var catalogoTipos=[],tiposPromise=null,tiposCarregados=false;
 var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoading=null,pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var multiSelections={type:new Set(),status:new Set(),period:new Set()},multiOptions={type:[],status:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
@@ -352,6 +379,7 @@ baseRows=raw.map(normalizeItem).filter(function(r){
  return !['FATURADO','CONCLUÍDO','CANCELADO'].includes(r.status)
 });
  applyPendingVisuals();
+ trimFabricSelection();
  hasData=true;cacheStamp=stamp||Date.now();setupFilters();
  $('updated').textContent=rows.length+' itens • '+new Date(cacheStamp).toLocaleString('pt-BR');
  cacheLabel(fromCache?'Atualizando…':'Atualizado',fromCache?'loading':'');
@@ -496,19 +524,69 @@ function rowEditable(r,k){
 function drawTable(arr){
  var sorted=sorting(arr),n=sorted.length,pages=Math.max(1,Math.ceil(n/pageSize));
  pageIndex=Math.max(1,Math.min(pageIndex,pages));
- var first=(pageIndex-1)*pageSize,part=sorted.slice(first,first+pageSize);
-
- var head='<tr>'+FIELDS.map(function(f){return '<th><div class="col-heading"><button class="col-sort" title="Ordenar '+esc(f[1])+'" onclick="sortBy('+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">'+esc(f[1])+' '+(sortKey===f[0]?(sortAsc?'↑':'↓'):'↕')+'</button><button class="col-filter '+(extraFilters.some(function(x){return x.k===f[0]})?'active':'')+'" aria-label="Filtrar '+esc(f[1])+'" title="Filtro como Excel" onclick="event.stopPropagation();openExcelFilter(event,'+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">▼</button></div></th>'}).join('')+'<th>DETALHE</th></tr>';
- var colWidths=[120,255,115,100,270,85,125,135,125,130,145,200,75,75,165,110,130,95];
- var colgroup='<colgroup>'+colWidths.map(function(w){return '<col style="width:'+w+'px">'}).join('')+'</colgroup>';
- var body=part.map(function(r){return '<tr onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" style="cursor:pointer">'+FIELDS.map(function(f){return '<td'+(f[0]==='product'?' class="desc"':'')+'>'+rowEditable(r,f[0])+'</td>'}).join('')+'<td><button class="action" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></td></tr>'}).join('');
+ var first=(pageIndex-1)*pageSize,part=sorted.slice(first,first+pageSize),canSelect=!!(profile&&profile.gestor);
+ var allChecked=canSelect&&part.length>0&&part.every(function(r){return selectedFabricRows.has(selectionId(r))});
+ var someChecked=canSelect&&part.some(function(r){return selectedFabricRows.has(selectionId(r))});
+ var selectHeading=canSelect?'<th class="select-col"><input id="pageSelectAll" type="checkbox" aria-label="Selecionar página" '+(allChecked?'checked':'')+' onchange="selectPageRows(this.checked)"></th>':'';
+ var head='<tr>'+selectHeading+FIELDS.map(function(f){return '<th><div class="col-heading"><button class="col-sort" title="Ordenar '+esc(f[1])+'" onclick="sortBy('+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">'+esc(f[1])+' '+(sortKey===f[0]?(sortAsc?'↑':'↓'):'↕')+'</button><button class="col-filter '+(extraFilters.some(function(x){return x.k===f[0]})?'active':'')+'" aria-label="Filtrar '+esc(f[1])+'" title="Filtro como Excel" onclick="event.stopPropagation();openExcelFilter(event,'+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">▼</button></div></th>'}).join('')+'<th>DETALHE</th></tr>';
+ var widths=[120,255,115,100,270,85,125,135,125,130,145,200,75,75,165,110,130,95];
+ var cols='<colgroup>'+(canSelect?'<col style="width:48px">':'')+widths.map(function(w){return '<col style="width:'+w+'px">'}).join('')+'</colgroup>';
+ var body=part.map(function(r){
+  var key=selectionId(r),selected=selectedFabricRows.has(key);
+  var sel=canSelect?'<td class="select-col"><input type="checkbox" data-select-key="'+esc(key)+'" aria-label="Selecionar '+esc(r.os||r.quote||'item')+'" '+(selected?'checked':'')+' onclick="event.stopPropagation()" onchange="toggleFabricRow(this)"></td>':'';
+  return '<tr class="'+(selected?'selected-row':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" style="cursor:pointer">'+sel+
+   FIELDS.map(function(f){return '<td'+(f[0]==='product'?' class="desc"':'')+'>'+rowEditable(r,f[0])+'</td>'}).join('')+
+   '<td><button class="action" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></td></tr>'
+ }).join('');
  var total=sorted.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0);
  var pager='<div class="pager"><button onclick="changePage(1)" '+(pageIndex===1?'disabled':'')+'>«</button><button onclick="changePage('+(pageIndex-1)+')" '+(pageIndex===1?'disabled':'')+'>‹</button><strong>Página '+pageIndex+' / '+pages+'</strong><button onclick="changePage('+(pageIndex+1)+')" '+(pageIndex===pages?'disabled':'')+'>›</button><button onclick="changePage('+pages+')" '+(pageIndex===pages?'disabled':'')+'>»</button><select onchange="changePageSize(this.value)" aria-label="Itens por página"><option '+(pageSize===50?'selected':'')+'>50</option><option '+(pageSize===100?'selected':'')+'>100</option><option '+(pageSize===200?'selected':'')+'>200</option></select><span>'+n+' itens</span></div>';
+ var controls=canSelect?'<div class="fabric-bulk-toolbar"><strong>'+selectedFabricRows.size+' selecionada(s)</strong><button class="btn small" onclick="selectFilteredRows()">☑ Selecionar todos filtrados ('+n+')</button><button class="btn small" '+(!selectedFabricRows.size?'disabled':'')+' onclick="clearFabricSelection()">Limpar seleção</button><button class="btn primary small" '+(!selectedFabricRows.size?'disabled':'')+' onclick="openBulk()">Alterar tipo / status em lote</button></div>':'';
  var old=$('screen').querySelector('.table-wrap'),x=old?old.scrollLeft:0,y=old?old.scrollTop:0;
- $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Grade completa • colunas A a Q • clique para ordenar ou abrir o serviço</p></div><div class="panel-actions"><button class="btn small" onclick="exportCSV()">↓ Exportar CSV</button><span class="tag">'+n+' itens</span></div></div><div class="table-wrap"><table class="grid-table">'+colgroup+'<thead>'+head+'</thead><tbody>'+(body||'<tr><td colspan="'+(FIELDS.length+1)+'"><div class="empty">Nenhum registro encontrado.</div></td></tr>')+'</tbody></table></div><div class="table-bottom">'+pager+'<strong>Total: '+money(total)+'</strong></div></section>';
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Marque uma ou várias OS para alterar em lote.</p></div><div class="panel-actions"><button class="btn small" onclick="exportCSV()">↓ Exportar CSV</button><span class="tag">'+n+' itens</span></div></div>'+controls+
+  '<div class="table-wrap"><table class="grid-table '+(canSelect?'with-selection':'')+'">'+cols+'<thead>'+head+'</thead><tbody>'+
+  (body||'<tr><td colspan="'+(FIELDS.length+(canSelect?2:1))+'"><div class="empty">Nenhum registro encontrado.</div></td></tr>')+'</tbody></table></div><div class="table-bottom">'+pager+'<strong>Total: '+money(total)+'</strong></div></section>';
  var box=$('screen').querySelector('.table-wrap');if(box){box.scrollLeft=x;box.scrollTop=y}
+ var master=$('pageSelectAll');if(master)master.indeterminate=!!(someChecked&&!allChecked)
 }
-
+function selectionId(r){
+ if(!r)return '';
+ var reg=String(read(r.raw,['registro_id'])||'').trim();if(reg)return reg;
+ var code=osCode(r);if(code!==null)return 'OS:'+code;
+ var guid=orcamentoGuid(r);if(guid)return 'ORC:'+guid;
+ return String(r.id)
+}
+function selectedFabricItems(){
+ var picked=new Map();
+ rows.forEach(function(r){var key=selectionId(r);if(selectedFabricRows.has(key))picked.set(key,r)});
+ return Array.from(picked.values())
+}
+function trimFabricSelection(){
+ var valid=new Set(rows.map(selectionId));
+ selectedFabricRows.forEach(function(key){if(!valid.has(key))selectedFabricRows.delete(key)})
+}
+function toggleFabricRow(el){
+ if(!profile||!profile.gestor)return;
+ if(el.checked)selectedFabricRows.add(el.dataset.selectKey);
+ else selectedFabricRows.delete(el.dataset.selectKey);
+ drawTable(filtered())
+}
+window.toggleFabricRow=toggleFabricRow;
+function selectPageRows(on){
+ if(!profile||!profile.gestor)return;
+ var page=sorting(filtered()).slice((pageIndex-1)*pageSize,pageIndex*pageSize);
+ page.forEach(function(r){var k=selectionId(r);if(on)selectedFabricRows.add(k);else selectedFabricRows.delete(k)});
+ drawTable(filtered())
+}
+window.selectPageRows=selectPageRows;
+function selectFilteredRows(){
+ if(!profile||!profile.gestor)return;
+ var matches=filtered();
+ if(matches.length>500){alert('Existem '+matches.length+' itens filtrados. Selecione até 500 por lote; refine o filtro.');return}
+ matches.forEach(function(r){selectedFabricRows.add(selectionId(r))});drawTable(matches)
+}
+window.selectFilteredRows=selectFilteredRows;
+function clearFabricSelection(){if(bulkBusy)return;selectedFabricRows.clear();if(view==='fabric')drawTable(filtered())}
+window.clearFabricSelection=clearFabricSelection;
 /* Filtro de coluna tipo Excel, com seleção múltipla e pesquisa. */
 function excelColumnName(key){var v=FIELDS.find(function(f){return f[0]===key});return v?v[1]:key}
 function excelLabel(key,v){
@@ -1039,7 +1117,7 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;multiSelections.type.clear();multiSelections.status.clear();multiSelections.period.clear()}
+   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;multiSelections.type.clear();multiSelections.status.clear();multiSelections.period.clear()}
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
