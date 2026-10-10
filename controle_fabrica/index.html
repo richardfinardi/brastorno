@@ -587,6 +587,133 @@ function selectFilteredRows(){
 window.selectFilteredRows=selectFilteredRows;
 function clearFabricSelection(){if(bulkBusy)return;selectedFabricRows.clear();if(view==='fabric')drawTable(filtered())}
 window.clearFabricSelection=clearFabricSelection;
+
+/* Ações em lote: usa as mesmas rotas auditadas da edição individual e do Kanban. */
+function bulkCandidates(){
+ var all=selectedFabricItems(),os=all.filter(function(r){return osCode(r)!==null}),
+  quotes=all.filter(function(r){return osCode(r)===null&&!!orcamentoGuid(r)});
+ return {all:all,os:os,quotes:quotes,semVinculo:all.length-os.length-quotes.length}
+}
+function closeBulk(){
+ if(bulkBusy){
+  bulkStop=true;
+  var msg=$('bulkProgress');if(msg)msg.textContent='Interrompendo após a operação atual…';
+  return
+ }
+ var el=$('bulkOverlay');if(el)el.classList.add('hidden')
+}
+window.closeBulk=closeBulk;
+function renderBulkTypes(){
+ var field=$('bulkType');if(!field)return;
+ var selected=bulkCandidates(),needOS=selected.os.length>0,needOrc=selected.quotes.length>0;
+ var allowed=catalogoTipos.filter(function(item){
+  return (!needOS||(item.codigo_servico!==null&&item.codigo_servico!==undefined))&&
+   (!needOrc||(item.codigo_orcamento!==null&&item.codigo_orcamento!==undefined))
+ });
+ field.innerHTML='<option value="">Não alterar o tipo</option>'+
+  allowed.map(function(item){return '<option value="'+esc(normalize(item.descricao))+'">'+esc(item.descricao)+'</option>'}).join('');
+ field.disabled=!tiposCarregados||bulkBusy;
+ var hint=$('bulkTypeHint');if(hint)hint.textContent=
+  !tiposCarregados?'Não foi possível consultar os cadastros de classificação.':
+  !allowed.length?'Nenhuma classificação comum encontrada para estes registros.':
+  'As classificações serão gravadas nos respectivos cadastros do CPS.'
+}
+async function openBulk(){
+ if(!profile||!profile.gestor||bulkBusy)return;
+ var chosen=bulkCandidates();
+ if(!chosen.all.length){alert('Selecione pelo menos uma linha.');return}
+ if(chosen.all.length>500){alert('O limite é de 500 itens por lote. Refine a seleção.');return}
+ var overlay=$('bulkOverlay');overlay.classList.remove('hidden');
+ var exemples=chosen.all.slice(0,8).map(function(r){return esc(r.os||r.quote||'Item')}).join(', ');
+ $('bulkBody').innerHTML='<div class="bulk-summary"><strong>'+chosen.all.length+' selecionado(s)</strong><span>'+
+  chosen.os.length+' OS • '+chosen.quotes.length+' orçamento(s) sem OS'+(chosen.semVinculo?' • '+chosen.semVinculo+' sem identificação':'')+
+  '</span><small>'+exemples+(chosen.all.length>8?' e outros…':'')+'</small></div>'+
+  '<div class="field"><label for="bulkType">Novo tipo / classificação</label><select id="bulkType" disabled><option value="">Carregando...</option></select><small id="bulkTypeHint">Consultando cadastro...</small></div>'+
+  '<div class="field"><label for="bulkStatus">Novo status</label><select id="bulkStatus"><option value="">Não alterar o status</option>'+
+   ['ENGENHARIA','PCP','COMPRAS','PRODUÇÃO','QUALIDADE','FATURAMENTO','EXPEDIÇÃO','CONCLUÍDO','PARALISADO','CANCELADO'].map(function(x){return '<option value="'+esc(x)+'">'+esc(x)+'</option>'}).join('')+
+  '</select><small>As mudanças de status ficarão aguardando aprovação do gestor. Itens sem OS não recebem status.</small></div>'+
+  '<div id="bulkProgress" class="bulk-progress">Escolha o tipo e/ou status e clique em Aplicar alterações.</div>';
+ $('bulkApplyBtn').disabled=false;
+ $('bulkApplyBtn').textContent='Aplicar alterações';
+ $('bulkCloseBtn').textContent='Cancelar';
+ if(!tiposCarregados)await carregarTipos();
+ if(!overlay.classList.contains('hidden'))renderBulkTypes()
+}
+window.openBulk=openBulk;
+async function applyBulk(){
+ if(bulkBusy||!profile||!profile.gestor)return;
+ var chosen=bulkCandidates(),choice=$('bulkType').value,status=$('bulkStatus').value;
+ if(!choice&&!status){alert('Selecione o tipo ou o status que deseja alterar.');return}
+ if(chosen.all.length>500){alert('Selecione no máximo 500 itens por vez.');return}
+ var tipo=choice?catalogoTipos.find(function(t){return normalize(t.descricao)===choice}):null;
+ if(choice&&!tipo){alert('Selecione uma classificação válida no CPS.');return}
+ var operacoesTipo=tipo?chosen.all.filter(function(r){return osCode(r)!==null||orcamentoGuid(r)}):[];
+ var operacoesStatus=status?chosen.os.filter(function(r){return !r.pending&&normalize(r.status)!==normalize(status)}):[];
+ if(!operacoesTipo.length&&!operacoesStatus.length){alert('Não há alterações aplicáveis nos itens selecionados.');return}
+ if(!confirm('Confirmar alteração em lote?\n\n'+chosen.all.length+' selecionado(s)'+
+  (tipo?'\nTipo: '+tipo.descricao+' ('+operacoesTipo.length+' elegíveis)':'')+
+  (status?'\nStatus: '+status+' ('+operacoesStatus.length+' solicitações de aprovação)':'')+
+  '\n\nAs operações serão registradas com seu usuário.'))return;
+ bulkBusy=true;bulkStop=false;
+ var typesDone=0,statusDone=0,skipped=0,fail=[],updated=new Map(),created=[],doneKeys=[],processedOS=new Set();
+ $('bulkApplyBtn').disabled=true;
+ $('bulkCloseBtn').textContent='Interromper';
+ try{
+  for(var i=0;i<chosen.all.length;i++){
+   if(bulkStop)break;
+   var r=chosen.all[i],code=osCode(r),guid=orcamentoGuid(r),key=selectionId(r),success=true,acted=false;
+   $('bulkProgress').textContent='Processando '+(i+1)+' de '+chosen.all.length+' • '+typesDone+' tipo(s) • '+statusDone+' status • '+fail.length+' falha(s)';
+   if(tipo&&(code!==null||guid)){
+    try{
+     var source=code!==null?'servico':'orcamento',cod=tipo[code!==null?'codigo_servico':'codigo_orcamento'];
+     if(cod===null||cod===undefined)throw Error('Não existe código de classificação para '+source);
+     var endp=code!==null?'/controle_fabrica/os/'+code+'/tipo':'/controle_fabrica/orcamento_item/'+encodeURIComponent(guid)+'/tipo';
+     await api(endp,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({cod_classificacao:cod,origem:source,classificacao:tipo.descricao})});
+     typesDone++;acted=true;updated.set(key,tipo.descricao)
+    }catch(e){success=false;fail.push((r.os||r.quote||key)+' • tipo: '+e.message)}
+   }else if(tipo)skipped++;
+   if(status){
+    if(code!==null&&!r.pending&&normalize(r.status)!==normalize(status)&&!processedOS.has(String(code))){
+     processedOS.add(String(code));
+     try{
+      var res=await api('/controle_fabrica/solicitacoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+       cod_os:code,n_os:r.os,status_anterior:r.status,status_novo:status,origem:'GESTAO_FABRICA_LOTE'
+      })});
+      created.push({id:res.id,cod_os:code,n_os:r.os,status_anterior:r.status,status_novo:status,usuario:profile.name,status:'PENDENTE'});
+      statusDone++;acted=true
+     }catch(e){success=false;fail.push((r.os||r.quote||key)+' • status: '+e.message)}
+    }else skipped++
+   }
+   if(success&&acted)doneKeys.push(key)
+  }
+ }finally{
+  bulkBusy=false;
+  doneKeys.forEach(function(key){selectedFabricRows.delete(key)});
+  if(updated.size){
+   baseRows=baseRows.map(function(row,i){
+    var desc=updated.get(selectionId(row));
+    return desc?normalizeItem(rawPatch(row.raw,['tipo','classificacao'],desc),i):row
+   })
+  }
+  if(created.length){
+   var codes=new Set(created.map(function(p){return String(p.cod_os)}));
+   pendingRequests=pendingRequests.filter(function(p){return !codes.has(String(p.cod_os))}).concat(created)
+  }
+  applyPendingVisuals();trimFabricSelection();setupFilters();render();
+  var report='Tipo: '+typesDone+' atualizado(s) • Status: '+statusDone+' enviado(s) para aprovação'+
+   (skipped?' • '+skipped+' ignorado(s)':'')+(fail.length?' • '+fail.length+' falha(s): '+fail.slice(0,3).join(' | '):'')+
+   (bulkStop?' • Interrompido':'');
+  $('bulkProgress').textContent=report;
+  $('bulkCloseBtn').textContent='Fechar';
+  $('bulkApplyBtn').disabled=true;
+  setNotice(report,fail.length?'warn':'ok');
+  if(typesDone||statusDone){
+   if(cacheKey)saveSnapshot(cacheKey,baseRows.map(function(r){return r.raw}),Date.now()).catch(function(){});
+   Promise.allSettled([loadData({force:true}),loadPending(),profile.gestor?loadApprovals():Promise.resolve()])
+  }
+ }
+}
+window.applyBulk=applyBulk;
 /* Filtro de coluna tipo Excel, com seleção múltipla e pesquisa. */
 function excelColumnName(key){var v=FIELDS.find(function(f){return f[0]===key});return v?v[1]:key}
 function excelLabel(key,v){
