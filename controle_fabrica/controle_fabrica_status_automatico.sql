@@ -157,7 +157,37 @@ SELECT
 
         ELSE
             'PCP - Aguardando disponibilidade de material'
-    END AS status_automatico
+    END AS status_automatico,
+    -- Explica o motivo do status. Não modifica a regra de prioridade V4.
+    CASE
+        WHEN b.cod_status = 14 THEN 'OS marcada como paralisada no CPS'
+        WHEN b.cod_status = 10 THEN 'Etapa de qualidade informada no CPS'
+        WHEN b.cod_status = 11 THEN 'Etapa de faturamento informada no CPS'
+        WHEN b.cod_status = 12 THEN 'Etapa de expedicao informada no CPS'
+        WHEN aa.cod_os IS NOT NULL THEN
+            'Apontamento em aberto: ' || COALESCE(aa.maquinas, 'maquina nao informada')
+        WHEN ua.cod_os IS NOT NULL THEN
+            'Ultimo apontamento: ' || COALESCE(ua.ultima_maquina, 'maquina nao informada')
+            || ' em ' || TO_CHAR(ua.data_ultimo_apontamento, 'DD/MM/YYYY HH24:MI')
+        WHEN m.cod_os IS NULL THEN 'Nenhuma lista de materiais registrada nesta OS'
+        WHEN m.nao_processados > 0 THEN
+            m.nao_processados::text || ' item(ns) da LM aguardando processamento'
+        WHEN m.itens_indisponiveis = 0 AND m.itens_necessarios = 0 THEN
+            'Nao ha itens com necessidade de materiais'
+        WHEN m.itens_indisponiveis = 0 AND b.cod_status = 9 THEN
+            'Materiais disponiveis; nenhum apontamento encontrado'
+        WHEN m.itens_indisponiveis = 0 THEN
+            m.total_itens::text || ' item(ns) na LM; materiais disponiveis'
+        WHEN m.sem_solicitacao > 0 THEN
+            m.sem_solicitacao::text || ' item(ns) sem solicitacao de material'
+        WHEN m.aguardando_oc > 0 THEN
+            m.aguardando_oc::text || ' item(ns) solicitados, sem OC emitida'
+        WHEN m.aguardando_chegada > 0 THEN
+            m.aguardando_chegada::text || ' item(ns) aguardando entrega/recebimento'
+        WHEN m.itens_indisponiveis > 0 THEN
+            m.itens_indisponiveis::text || ' item(ns) ainda indisponiveis para uso'
+        ELSE 'Sem detalhe adicional registrado'
+    END AS detalhamento_status
 FROM os_ativas b
 LEFT JOIN apontamento_aberto aa
   ON aa.cod_empresa = b.cod_empresa AND aa.cod_os = b.cod_os
