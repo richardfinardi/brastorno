@@ -307,6 +307,10 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .auto-status-cell.empty{color:#8491a0;background:#f7f8fa;border-color:#eceff2;font-weight:500}
 .auto-mini{margin:7px 0 4px;border-left:3px solid #a0bed3;padding:5px 8px;font-size:11px;font-weight:700;color:#456581;background:#f0f6fb;border-radius:0 5px 5px 0;overflow-wrap:anywhere}
 .auto-mini b{font-size:10px;letter-spacing:.02em;color:#52758a}
+.edit-save-actions{display:flex;align-items:center;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid #e5eaf0}
+.edit-save-actions .btn{min-width:180px}
+.auto-detail-cell{display:block;max-width:300px;white-space:normal;font-size:11px;line-height:1.45;color:#516781;overflow-wrap:anywhere}
+.auto-detail-mini{display:block;margin-top:5px;color:#586f82;font-size:10px;font-weight:600;line-height:1.45}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -340,7 +344,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <div id="excelFilterPopup" class="excel-filter hidden" role="dialog" aria-label="Filtro da coluna" onclick="event.stopPropagation()"></div>
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
 <div class="modal" role="dialog" aria-modal="true"><div class="modalhead"><h2 id="modalTitle">Detalhes do item</h2><button class="btn small" onclick="closeModal()">Fechar ✕</button></div>
-<div class="modalbody" id="modalBody"></div><div class="modalfoot"><button class="btn" onclick="closeModal()">Fechar</button><button class="btn primary hidden" id="btnSaveModal" onclick="saveModal()">Salvar alterações</button></div></div></div>
+<div class="modalbody" id="modalBody"></div><div class="modalfoot"><button class="btn" onclick="closeModal()">Fechar</button></div></div></div>
 <script>
 (function(){
 'use strict';
@@ -348,7 +352,7 @@ var API='https://brastorno.consultoriarf.net';
 var STATUS=['SEM OS','ENGENHARIA','PCP','COMPRAS','PRODUÇÃO','QUALIDADE','FATURAMENTO','EXPEDIÇÃO','CONCLUÍDO','FATURADO','PARALISADO','CANCELADO'];
 var PERMS={'ENGENHARIA':'U_ENG','PCP':'U_PCP','COMPRAS':'U_COMPRAS','PRODUÇÃO':'U_PROD','QUALIDADE':'U_CQ','FATURAMENTO':'U_FAT','EXPEDIÇÃO':'U_EXP'};
 var codeStatus={6:'ENGENHARIA',7:'PCP',8:'COMPRAS',9:'PRODUÇÃO',10:'QUALIDADE',11:'FATURAMENTO',12:'EXPEDIÇÃO',13:'CONCLUÍDO',14:'PARALISADO',15:'CANCELADO'};
-var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS CPS'],['autoStatus','STATUS AUTOMÁTICO'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['month','MÊS'],['year','ANO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
+var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS CPS'],['autoStatus','STATUS AUTOMÁTICO'],['autoDetail','DETALHAMENTO'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['month','MÊS'],['year','ANO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
 var cacheKey='',cacheStamp=0,lastRefreshAt=0,fetchingData=null,hasData=false,initializing=null;
 var CACHE_NAME='brastorno_fabrica_cache_v3',CACHE_TABLE='snapshots',CACHE_SCHEMA=3;
 var excelKey=null,excelValues=[],excelSelected=new Set(),excelSearch='',excelPopupOpen=false;
@@ -359,7 +363,7 @@ var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoad
 var multiSelections={type:new Set(),status:new Set(),auto:new Set(),period:new Set()},multiOptions={type:[],status:[],auto:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
 var kanbanPendingOnly=false;
 // Dados derivados, exclusivamente informativos. Nunca participam das alteracoes de status do CPS.
-var autoStatuses=new Map(),autoBusy=false,autoLoaded=false,autoError='';
+var autoStatuses=new Map(),autoDetails=new Map(),autoBusy=false,autoLoaded=false,autoError='';
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null,kanbanScrollFrame=0,kanbanScrollSpeed=0;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
 var $=function(x){return document.getElementById(x)};
@@ -515,6 +519,7 @@ function applyPendingVisuals(){
   var keyCodigo=codAuto!==''?'COD:'+codAuto:'';
   var keyNumero=r.os?'NUM:'+normalize(r.os):'';
   r.autoStatus=autoStatuses.get(registro)||autoStatuses.get(keyEmpresa)||autoStatuses.get(keyCodigo)||autoStatuses.get(keyNumero)||'—';
+  r.autoDetail=autoDetails.get(registro)||autoDetails.get(keyEmpresa)||autoDetails.get(keyCodigo)||autoDetails.get(keyNumero)||'—';
   var id=osCode(r),p=(id!==null?byOS.get(String(id)):null)||(r.os?byNumber.get(String(r.os).trim()):null);
   if(!p||!p.status_novo)return r;
   if(normalize(r.status)!==normalize(p.status_anterior))return r;
@@ -531,22 +536,23 @@ async function loadAutoStatuses(){
  try{
   var result=await api('/controle_fabrica/status_automatico?_t='+Date.now());
   if(chave!==cacheKey)return;
-  var list=flattenResult(result),map=new Map();
+  var list=flattenResult(result),map=new Map(),details=new Map();
   list.forEach(function(item){
    var registro=String(read(item,['registro_id'])||'').trim().toUpperCase();
    var valor=String(read(item,['status_automatico'])||'').trim();
+   var detalhe=String(read(item,['detalhamento_status'])||'').trim();
    if(!valor)return;
-   if(registro)map.set(registro,valor);
+   if(registro){map.set(registro,valor);if(detalhe)details.set(registro,detalhe)}
    var cod=read(item,['cod_os','codigo_os']);
    var empresa=read(item,['cod_empresa']);
    var numero=String(read(item,['n_os','os'])||'').trim();
    if(cod!==''&&cod!==null){
-    map.set('COD:'+cod,valor);
-    if(empresa!==''&&empresa!==null)map.set('OS:'+empresa+':'+cod,valor)
+    map.set('COD:'+cod,valor);if(detalhe)details.set('COD:'+cod,detalhe);
+    if(empresa!==''&&empresa!==null){map.set('OS:'+empresa+':'+cod,valor);if(detalhe)details.set('OS:'+empresa+':'+cod,detalhe)}
    }
-   if(numero)map.set('NUM:'+normalize(numero),valor)
+   if(numero){map.set('NUM:'+normalize(numero),valor);if(detalhe)details.set('NUM:'+normalize(numero),detalhe)}
   });
-  autoStatuses=map;autoLoaded=true;autoError='';
+  autoStatuses=map;autoDetails=details;autoLoaded=true;autoError='';
   applyPendingVisuals();setupFilters();render();
   var associados=baseRows.filter(function(r){
    var reg=String(read(r.raw,['registro_id'])||'').trim().toUpperCase();
@@ -710,6 +716,7 @@ function cell(r,k){
  if(k==='value')return money(v);
  if(k==='status')return label(v);
   if(k==='autoStatus')return '<span class="auto-status-cell '+(!v||v==='—'?'empty':'')+'" title="Indicador calculado: não altera o status oficial do CPS">'+esc(v||'—')+'</span>';
+  if(k==='autoDetail')return '<span class="auto-detail-cell" title="'+esc(v||'')+'">'+esc(v||'—')+'</span>';
  if(k==='situation')return badge(v,r.urgent?'bad':'');
  if(k==='obs'){var summary=obsExcerpt(v);return '<span title="'+esc(obsPlain(v).slice(-700))+'">'+esc(summary||'—')+'</span>';}
  if(k==='os')return '<strong>'+esc(v||'—')+'</strong>';
@@ -741,7 +748,7 @@ function drawTable(arr){
  var someChecked=canSelect&&part.some(function(r){return selectedFabricRows.has(selectionId(r))});
  var selectHeading=canSelect?'<th class="select-col"><input id="pageSelectAll" type="checkbox" aria-label="Selecionar página" '+(allChecked?'checked':'')+' onchange="selectPageRows(this.checked)"></th>':'';
  var head='<tr>'+selectHeading+FIELDS.map(function(f){return '<th><div class="col-heading"><button class="col-sort" title="Ordenar '+esc(f[1])+'" onclick="sortBy('+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">'+esc(f[1])+' '+(sortKey===f[0]?(sortAsc?'↑':'↓'):'↕')+'</button><button class="col-filter '+(extraFilters.some(function(x){return x.k===f[0]})?'active':'')+'" aria-label="Filtrar '+esc(f[1])+'" title="Filtro como Excel" onclick="event.stopPropagation();openExcelFilter(event,'+JSON.stringify(f[0]).replace(/"/g,'&quot;')+')">▼</button></div></th>'}).join('')+'<th>DETALHE</th></tr>';
- var widths=[120,255,115,100,270,85,125,135,125,130,305,145,200,75,75,165,110,130,95];
+ var widths=[120,255,115,100,270,85,125,135,125,130,305,305,145,200,75,75,165,110,130,95];
  var cols='<colgroup>'+(canSelect?'<col style="width:48px">':'')+widths.map(function(w){return '<col style="width:'+w+'px">'}).join('')+'</colgroup>';
  var body=part.map(function(r){
   var key=selectionId(r),selected=selectedFabricRows.has(key);
@@ -1015,7 +1022,7 @@ function drawStatus(arr){
  var moneyBars=rank.map(function(x){return '<div class="sline" style="grid-template-columns:180px 1fr 130px"><span class="name">'+esc(x[0])+'</span><div class="track"><div class="fill" style="background:#4979a8;width:'+Math.round(x[1].value/maxValue*100)+'%"></div></div><div class="val">'+money(x[1].value)+'</div></div>'}).join('');
  $('screen').innerHTML='<section class="split"><div class="panel"><div class="panel-head"><div><h2>B. Distribuição por status</h2><p>Quantidade de itens por etapa operacional</p></div></div><div class="status-lines">'+(bars||'<div class="empty">Sem itens.</div>')+'</div></div><div class="panel"><div class="panel-head"><div><h2>Carteira por macroetapa</h2><p>Distribuição visual do mesmo conjunto de OS</p></div></div><div class="donutbox"><div class="donut" style="background:conic-gradient('+conic+')"><strong>'+arr.length+'</strong></div><div class="legend">'+legends+'</div></div></div></section><section class="panel"><div class="panel-head"><div><h2>Valor por status</h2><p>Valor dos itens agrupado por status no CPS</p></div></div><div style="padding:12px 20px;overflow-x:auto">'+(moneyBars||'<div class="empty">Sem valores.</div>')+'</div></section>'
 }
-function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p>'+(r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini"><b>STATUS AUTOMÁTICO</b><br>'+esc(r.autoStatus)+'</div>':'')+'<div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></div>'+(r.pending?'<span class="pending-badge">Aguardando aprovação</span>':'')+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
+function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p>'+(r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini"><b>STATUS AUTOMÁTICO</b><br>'+esc(r.autoStatus)+(r.autoDetail&&r.autoDetail!=='—'?'<small class="auto-detail-mini">'+esc(r.autoDetail)+'</small>':'')+'</div>':'')+'<div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></div>'+(r.pending?'<span class="pending-badge">Aguardando aprovação</span>':'')+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
 function drawRoles(arr){
  var sorted=sorting(arr),cards=sorted.slice(0,rolesLimit).map(tile).join('');
  var more=arr.length>rolesLimit?'<button class="btn small" style="margin:10px 16px 18px" onclick="moreRoles()">Mostrar mais '+Math.min(100,arr.length-rolesLimit)+' de '+(arr.length-rolesLimit)+' restantes</button>':'';
@@ -1036,7 +1043,7 @@ function drawKanban(arr){
    '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong>'+
    '<span class="drag-handle '+((r.status==='FATURADO'||r.status==='SEM OS'||(r.pending&&!canAdjustPending(r)))?'disabled':'')+'" title="'+(['FATURADO','SEM OS'].includes(r.status)?'Status calculado, não permite movimentação':(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui'))+'" role="button" aria-label="Arrastar OS" draggable="'+((['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r)))?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
    '<div class="meta"><span title="'+esc(r.client)+'">'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+ 
-   (r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini" title="Status automático informativo"><b>AUTOMÁTICO</b><br>'+esc(r.autoStatus)+'</div>':'')+
+   (r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini" title="Status automático informativo"><b>AUTOMÁTICO</b><br>'+esc(r.autoStatus)+(r.autoDetail&&r.autoDetail!=='—'?'<small class="auto-detail-mini">'+esc(r.autoDetail)+'</small>':'')+'</div>':'')+
    (r.pending?'<span class="pending-badge" title="'+esc(r.previousStatus+' → '+r.status)+'">⏳ Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
    (r.urgent?badge(r.situation,'bad'):'')+'</div>'
   }).join('');
@@ -1193,13 +1200,13 @@ function openModal(id,focusField){
    '<div class="field"><label for="editType">Tipo / Classificação</label><select id="editType" '+(!tiposCarregados?'disabled':'')+'>'+montarOpcoesTipo(r)+'</select><small class="field-help">Atual: '+esc(r.type||'—')+' • '+(isOS?'Cadastro de serviços':'Cadastro de orçamentos')+'</small></div>'+
    (isOS?'<div class="field"><label for="editForecast">Previsão de liberação</label><input id="editForecast" type="date" value="'+esc(r.forecast||'')+'"></div>':'')+'</div>'+
    (isOS?'<div class="field" style="margin-top:12px"><label for="editObservation">Nova observação</label><textarea id="editObservation" maxlength="10000" placeholder="Adicionar ao histórico sem apagar as observações anteriores"></textarea></div>':'')+
-   '<small style="display:block;margin-top:8px;color:#738198">Cada alteração é registrada com usuário, data e hora.</small>'+
+   '<small style="display:block;margin-top:8px;color:#738198">Cada alteração é registrada com usuário, data e hora.</small>'+ 
+   '<div class="edit-save-actions"><button type="button" id="btnSaveModal" class="btn primary" onclick="saveModal()">Salvar alterações</button></div>'+
    '</div>';
  }
  var compact='<div class="obs-service-ref"><strong>'+esc(r.product||r.os||'Servico')+'</strong><span>'+esc(r.client||'')+'</span></div>';
  $('modalBody').innerHTML=(r.pending?'<div class="pending-badge" style="margin-bottom:12px">Aguardando aprovação: '+esc(r.previousStatus)+' → '+esc(r.status)+'</div>':'')+
  compact+edit+logs+'<section class="edit-section obs-service-data"><h3>Dados do servico</h3>'+values+'</section>';
- $('btnSaveModal').classList.toggle('hidden',!canEdit);
  $('overlay').classList.add('show');
  if(canEdit&&!tiposCarregados)carregarTipos();
  if(focusField&&canEdit){var target=$(focusField==='type'?'editType':'editForecast');if(target)target.focus()}
@@ -1460,7 +1467,7 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;autoStatuses=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
+   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;autoStatuses=new Map();autoDetails=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
