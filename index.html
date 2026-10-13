@@ -825,11 +825,11 @@ function drawTable(arr){
   var sel=canSelect?'<td class="select-col"><input type="checkbox" data-select-key="'+esc(key)+'" aria-label="Selecionar '+esc(r.os||r.quote||'item')+'" '+(selected?'checked':'')+' onclick="event.stopPropagation()" onchange="toggleFabricRow(this)"></td>':'';
   return '<tr class="'+(selected?'selected-row':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" style="cursor:pointer">'+sel+
    FIELDS.map(function(f){return '<td'+(f[0]==='product'?' class="desc"':'')+'>'+rowEditable(r,f[0])+'</td>'}).join('')+
-   '<td><button class="action" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></td></tr>'
+   '<td><button class="action" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button> '+(canSelect?'<button class="btn small" title="Ocultar a OS e orçamento de todas as telas" onclick="event.stopPropagation();sendOneLimbo('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Limbo</button>':'')+'</td></tr>'
  }).join('');
  var total=sorted.reduce(function(a,r){return a+(Number(String(r.value).replace(',','.'))||0)},0);
  var pager='<div class="pager"><button onclick="changePage(1)" '+(pageIndex===1?'disabled':'')+'>«</button><button onclick="changePage('+(pageIndex-1)+')" '+(pageIndex===1?'disabled':'')+'>‹</button><strong>Página '+pageIndex+' / '+pages+'</strong><button onclick="changePage('+(pageIndex+1)+')" '+(pageIndex===pages?'disabled':'')+'>›</button><button onclick="changePage('+pages+')" '+(pageIndex===pages?'disabled':'')+'>»</button><select onchange="changePageSize(this.value)" aria-label="Itens por página"><option '+(pageSize===50?'selected':'')+'>50</option><option '+(pageSize===100?'selected':'')+'>100</option><option '+(pageSize===200?'selected':'')+'>200</option></select><span>'+n+' itens</span></div>';
- var controls=canSelect?'<div class="fabric-bulk-toolbar"><strong>'+selectedFabricRows.size+' selecionada(s)</strong><button class="btn small" onclick="selectFilteredRows()">☑ Selecionar todos filtrados ('+n+')</button><button class="btn small" '+(!selectedFabricRows.size?'disabled':'')+' onclick="clearFabricSelection()">Limpar seleção</button><button class="btn primary small" '+(!selectedFabricRows.size?'disabled':'')+' onclick="openBulk()">Alterar tipo / status em lote</button></div>':'';
+ var controls=canSelect?'<div class="fabric-bulk-toolbar"><strong>'+selectedFabricRows.size+' selecionada(s)</strong><button class="btn small" onclick="selectFilteredRows()">☑ Selecionar todos filtrados ('+n+')</button><button class="btn small" '+(!selectedFabricRows.size?'disabled':'')+' onclick="clearFabricSelection()">Limpar seleção</button><button class="btn primary small" '+(!selectedFabricRows.size?'disabled':'')+' onclick="openBulk()">Alterar tipo / status em lote</button><button class="btn small" '+(!selectedFabricRows.size?'disabled':'')+' onclick="sendSelectedLimbo()">Enviar selecionados ao Limbo</button></div>':'';
  var old=$('screen').querySelector('.table-wrap'),x=old?old.scrollLeft:0,y=old?old.scrollTop:0;
  $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>A. Gestão de Fábrica</h2><p>Marque uma ou várias OS para alterar em lote.</p></div><div class="panel-actions"><button class="btn small" onclick="exportCSV()">↓ Exportar CSV</button><span class="tag">'+n+' itens</span></div></div>'+controls+
   '<div class="table-wrap"><table class="grid-table '+(canSelect?'with-selection':'')+'">'+cols+'<thead>'+head+'</thead><tbody>'+
@@ -1274,6 +1274,9 @@ function openModal(id,focusField){
    '<div class="edit-save-actions"><button type="button" id="btnSaveModal" class="btn primary" onclick="saveModal()">Salvar alterações</button></div>'+
    '</div>';
  }
+ if(!canEdit&&isOS&&profile&&profile.roles.includes(r.status)){
+  edit='<div class="edit-section"><h3>Adicionar observação</h3><div class="field"><label for="editObservation">Nova observação</label><textarea id="editObservation" maxlength="10000" placeholder="Registro com usuário e data no histórico da OS."></textarea></div><div class="edit-save-actions"><button id="btnSaveModal" type="button" class="btn primary" onclick="saveModal()">Registrar observação</button></div></div>';
+ }
  var compact='<div class="obs-service-ref"><strong>'+esc(r.product||r.os||'Servico')+'</strong><span>'+esc(r.client||'')+'</span></div>';
  $('modalBody').innerHTML=(r.pending?'<div class="pending-badge" style="margin-bottom:12px">Aguardando aprovação: '+esc(r.previousStatus)+' → '+esc(r.status)+'</div>':'')+
  compact+edit+logs+'<section class="edit-section obs-service-data"><h3>Dados do servico</h3>'+values+'</section>';
@@ -1310,13 +1313,13 @@ function patchLocalOrc(guid,desc){
 }
 async function saveModal(){
  var r=selected,code=osCode(r),guid=orcamentoGuid(r),isOS=!!code;
- if(!r||!profile||!profile.gestor||(!code&&!guid))return;
- var choice=$('editType')?$('editType').value:'',
+ if(!r||!profile||(!code&&!guid)||(!profile.gestor&&!code))return;
+ var choice=profile.gestor&&$('editType')?$('editType').value:'',
      item=choice?catalogoTipos.find(function(t){return (isOS?'servico:':'orcamento:')+
        t[isOS?'codigo_servico':'codigo_orcamento']===choice}):null;
  if(choice&&!item){alert('Tipo inválido. Aguarde a atualização do cadastro.');return}
  var typeNew=item?item.descricao:null,
-     newDate=isOS&&$('editForecast')?$('editForecast').value||null:null,
+     newDate=profile.gestor&&isOS&&$('editForecast')?$('editForecast').value||null:null,
      note=isOS&&$('editObservation')?obsPlain($('editObservation').value):'';
  var changes=[];
  if(item)changes.push(['tipo',{
@@ -1324,7 +1327,7 @@ async function saveModal(){
    origem:isOS?'servico':'orcamento',
    classificacao:typeNew
  },'PATCH','type']);
- if(isOS&&(newDate||'')!==(r.forecast||''))changes.push(['previsao',{u_prev_lib:newDate},'PATCH','forecast']);
+ if(isOS&&profile.gestor&&(newDate||'')!==(r.forecast||''))changes.push(['previsao',{u_prev_lib:newDate},'PATCH','forecast']);
  if(note)changes.push(['observacoes',{texto:note},'POST','note']);
  if(!changes.length){closeModal();return}
  var btn=$('btnSaveModal');btn.disabled=true;btn.textContent='Salvando…';
