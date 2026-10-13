@@ -1200,6 +1200,32 @@ function restoreOneLimbo(id){return limboAction([id],false)}
 window.restoreOneLimbo=restoreOneLimbo;
 function restoreSelectedLimbo(){return limboAction(Array.from(limboSelected),false)}
 window.restoreSelectedLimbo=restoreSelectedLimbo;
+// Justificativa de movimentação: escreve no histórico do CPS antes da aprovação.
+function openPendingNote(rowId){
+ var r=rows.find(function(x){return x.id===rowId});
+ if(!r||!r.pending||!canAdjustPending(r)||!r.pendingInfo||!r.pendingInfo.id)return;
+ notePendingId=String(r.pendingInfo.id);
+ $('pendingNoteContext').textContent='OS '+(r.os||'')+' • '+r.previousStatus+' → '+r.status;
+ $('pendingNoteText').value='';$('noteOverlay').classList.remove('hidden');$('pendingNoteText').focus()
+}
+window.openPendingNote=openPendingNote;
+function closePendingNote(){notePendingId=null;$('noteOverlay').classList.add('hidden')}
+window.closePendingNote=closePendingNote;
+async function savePendingNote(){
+ if(!notePendingId)return;
+ var texto=$('pendingNoteText').value.trim();
+ if(!texto){alert('Escreva a justificativa.');return}
+ var btn=$('savePendingNoteBtn'),id=notePendingId;btn.disabled=true;btn.textContent='Salvando…';
+ try{
+  await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(id)+'/observacao',{
+   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:texto})
+  });
+  closePendingNote();setNotice('Justificativa registrada no histórico da OS.','ok');
+  await Promise.allSettled([loadData({force:true}),loadPending()]);
+ }catch(e){setNotice('Não foi possível registrar a justificativa: '+e.message,'error')}
+ finally{btn.disabled=false;btn.textContent='Gravar no histórico'}
+}
+window.savePendingNote=savePendingNote;
 function approvalDetails(req,byCod,byOS){
  var code=String(req.cod_os==null?'':req.cod_os),number=String(req.n_os||req.os||'').trim();
  return byCod.get(code)||byOS.get(number)||null
