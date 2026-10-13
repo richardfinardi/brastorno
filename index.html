@@ -716,19 +716,19 @@ function laneReason(status){
 function statusReason(r){
  if(!r)return 'Situação oficial do CPS ou classificação calculada pela aplicação.';
  if(r.pending){
-  return 'MOVIMENTAÇÃO PENDENTE DE APROVAÇÃO\\nO Kanban está exibindo provisoriamente '+(r.status||'esta etapa')+'.\\nStatus anterior no CPS: '+(r.previousStatus||'não informado')+'. A alteração só será oficial após aprovação do gestor.'
+  return 'MOVIMENTAÇÃO PENDENTE DE APROVAÇÃO\nO Kanban está exibindo provisoriamente '+(r.status||'esta etapa')+'.\nStatus anterior no CPS: '+(r.previousStatus||'não informado')+'. A alteração só será oficial após aprovação do gestor.'
  }
  var raw=r.raw||{},st=normalize(r.status),nRaw=read(raw,['cod_status','status_codigo','codigo_status']),n=nRaw===''?null:Number(nRaw);
  var origem=normalize(read(raw,['status','status_calculado']));
  var faturado=normalize(read(raw,['situacao','situacao_prazo']))==='FATURADO'||origem==='FATURADO'||truthy(read(raw,['faturado_total']));
- if(st==='FATURADO'&&faturado)return 'FATURADO\\nA consulta sinalizou faturamento integral dos itens de orçamento. A regra de faturamento prevalece sobre o status manual da OS.';
- if(st==='SEM OS')return 'SEM OS\\nOrçamento aprovado sem OS vinculada. Este item ainda não possui uma etapa oficial de serviço para movimentar.';
+ if(st==='FATURADO'&&faturado)return 'FATURADO\nA consulta sinalizou faturamento integral dos itens de orçamento. A regra de faturamento prevalece sobre o status manual da OS.';
+ if(st==='SEM OS')return 'SEM OS\nOrçamento aprovado sem OS vinculada. Este item ainda não possui uma etapa oficial de serviço para movimentar.';
  var concluida=n===13||truthy(read(raw,['os_concluida','concluido']))||origem==='CONCLUIDO'||normalize(read(raw,['prosicao','posicao']))==='CONCLUIDO'||normalize(read(raw,['situacao','situacao_prazo']))==='CONCLUIDO';
- if(st==='FATURAMENTO'&&concluida)return 'AGUARDANDO FATURAMENTO\\nA OS está concluída no CPS e tem orçamento vinculado, mas o faturamento integral não foi identificado. Por isso aparece em Faturamento, mesmo que o código da OS seja 13.';
- if(st==='CONCLUIDO'&&concluida)return 'CONCLUÍDO\\nO CPS informa a OS como concluída e não há orçamento vinculado para acompanhar faturamento.';
- if(n!==null&&codeStatus[n]===r.status)return 'STATUS OFICIAL DO CPS\\nTOS.COD_STATUS = '+n+' ('+r.status+').\\nEsta etapa vem do cadastro de serviços, inclusive movimentações já aprovadas. Não depende do Status Automático.';
+ if(st==='FATURAMENTO'&&concluida)return 'AGUARDANDO FATURAMENTO\nA OS está concluída no CPS e tem orçamento vinculado, mas o faturamento integral não foi identificado. Por isso aparece em Faturamento, mesmo que o código da OS seja 13.';
+ if(st==='CONCLUIDO'&&concluida)return 'CONCLUÍDO\nO CPS informa a OS como concluída e não há orçamento vinculado para acompanhar faturamento.';
+ if(n!==null&&codeStatus[n]===r.status)return 'STATUS OFICIAL DO CPS\nTOS.COD_STATUS = '+n+' ('+r.status+').\nEsta etapa vem do cadastro de serviços, inclusive movimentações já aprovadas. Não depende do Status Automático.';
  var manual=String(read(raw,['status_servico','status_os','fase'])||'').trim();
- return 'STATUS EXIBIDO\\n'+r.status+(manual?'\\nCampo textual do CPS: '+manual:'')+'\\nIndicadores de materiais e apontamentos são exibidos separadamente no Status Automático.'
+ return 'STATUS EXIBIDO\n'+r.status+(manual?'\nCampo textual do CPS: '+manual:'')+'\nIndicadores de materiais e apontamentos são exibidos separadamente no Status Automático.'
 }
 function situationReason(r){
  if(!r)return 'Situação calculada com as datas de entrega e liberação.';
@@ -737,16 +737,16 @@ function situationReason(r){
  var overdue=[];
  if(ag&&ag<=TODAY)overdue.push('entrega acordada '+human(ag));
  if(af&&af<=TODAY)overdue.push('previsão de liberação '+human(af));
- if(situation.includes('FATURADO'))return 'FATURADO\\nA OS foi classificada como totalmente faturada pela consulta.';
- if(situation.includes('AGUARDANDO FATURAMENTO'))return 'AGUARDANDO FATURAMENTO\\nA OS está concluída, possui orçamento e não consta como integralmente faturada.';
- if(situation==='CONCLUIDO')return 'CONCLUÍDO\\nA OS consta como concluída no CPS.';
- if(situation.includes('SEM OS')&&situation.includes('ATRASAD'))return 'SEM OS — ATRASADO\\nExiste orçamento sem OS vinculada'+(overdue.length?' com prazo atingido ou vencido: '+overdue.join(' e '):'. A consulta sinalizou atraso')+'.\\n'+prazoInfo;
- if(situation.includes('VENCID')||situation.includes('ATRASAD'))return 'PRAZO VENCIDO\\n'+(overdue.length?'Data(s) atingida(s) ou ultrapassada(s): '+overdue.join(' e ')+'.':'A consulta do CPS marcou o prazo como vencido.')+'\\n'+prazoInfo;
- if(situation.includes('AVISAR AO COMERCIAL')||situation.includes('ACIMA DO ACORDADO'))return 'AVISAR AO COMERCIAL\\n'+(ag&&af&&af>ag?'Previsão de liberação '+human(af)+' é posterior à entrega acordada '+human(ag)+'.':'A consulta identificou divergência de prazo.')+'\\n'+prazoInfo;
- if(situation.includes('SEM PREVISAO'))return 'SEM PREVISÃO\\nA consulta não identificou previsão de liberação definida.\\n'+prazoInfo;
- if(situation.includes('AGUARDANDO OS'))return 'AGUARDANDO OS\\nO orçamento existe, mas ainda não há ordem de serviço vinculada.\\n'+prazoInfo;
- if(situation.includes('DENTRO DO PROGRAMADO'))return 'DENTRO DO PROGRAMADO\\nA consulta não classificou este item como vencido ou em alerta.\\n'+prazoInfo;
- return 'SITUAÇÃO DA CONSULTA\\n'+(r.situation||'Não informada')+'\\n'+prazoInfo
+ if(situation.includes('FATURADO'))return 'FATURADO\nA OS foi classificada como totalmente faturada pela consulta.';
+ if(situation.includes('AGUARDANDO FATURAMENTO'))return 'AGUARDANDO FATURAMENTO\nA OS está concluída, possui orçamento e não consta como integralmente faturada.';
+ if(situation==='CONCLUIDO')return 'CONCLUÍDO\nA OS consta como concluída no CPS.';
+ if(situation.includes('SEM OS')&&situation.includes('ATRASAD'))return 'SEM OS — ATRASADO\nExiste orçamento sem OS vinculada'+(overdue.length?' com prazo atingido ou vencido: '+overdue.join(' e '):'. A consulta sinalizou atraso')+'.\n'+prazoInfo;
+ if(situation.includes('VENCID')||situation.includes('ATRASAD'))return 'PRAZO VENCIDO\n'+(overdue.length?'Data(s) atingida(s) ou ultrapassada(s): '+overdue.join(' e ')+'.':'A consulta do CPS marcou o prazo como vencido.')+'\n'+prazoInfo;
+ if(situation.includes('AVISAR AO COMERCIAL')||situation.includes('ACIMA DO ACORDADO'))return 'AVISAR AO COMERCIAL\n'+(ag&&af&&af>ag?'Previsão de liberação '+human(af)+' é posterior à entrega acordada '+human(ag)+'.':'A consulta identificou divergência de prazo.')+'\n'+prazoInfo;
+ if(situation.includes('SEM PREVISAO'))return 'SEM PREVISÃO\nA consulta não identificou previsão de liberação definida.\n'+prazoInfo;
+ if(situation.includes('AGUARDANDO OS'))return 'AGUARDANDO OS\nO orçamento existe, mas ainda não há ordem de serviço vinculada.\n'+prazoInfo;
+ if(situation.includes('DENTRO DO PROGRAMADO'))return 'DENTRO DO PROGRAMADO\nA consulta não classificou este item como vencido ou em alerta.\n'+prazoInfo;
+ return 'SITUAÇÃO DA CONSULTA\n'+(r.situation||'Não informada')+'\n'+prazoInfo
 }
 function whyTitle(reason){return ' title="'+esc(reason)+'"'}
 function badge(s,kind){return '<span class="tag '+(kind||'')+'">'+esc(s)+'</span>'}
