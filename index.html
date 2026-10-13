@@ -289,25 +289,22 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .obs-service-data{background:white}
 .obs-service-data h3{margin-bottom:14px}
 
-/* OBS igual ao CPS: historico corrido, uma entrada por linha, sem cartoes grandes. */
-.obs-section{border:1px solid #dfe7ee;background:#fff;padding:13px 15px;border-radius:10px;margin-top:12px}
-.obs-title-row{margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e7ecf2}
-.obs-title-row h3{font-size:13px;margin:0}
-.obs-counter{padding:4px 8px;font-size:10px;background:#f3f6f9;color:#556981;border-color:#e4eaf1}
-.obs-lines{max-height:430px;overflow-x:hidden;overflow-y:auto;font:12px/1.65 Consolas,"Courier New",monospace;color:#263a57;padding:0}
-.obs-line{display:block;padding:6px 4px;border-bottom:1px solid #edf0f4;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal}
-.obs-line:last-child{border-bottom:0}
-.obs-prefix{color:#486077;font-weight:700}
-.obs-message{color:#1d2f46}
-.obs-empty{font-size:12px;padding:16px;background:#f8fafc}
-@media(max-width:640px){.obs-section{padding:10px}.obs-line{font-size:11px;padding:5px 1px}}
+/* Histórico de observações em cards, com o último registro em destaque. */
+.obs-section{border:1px solid #e0e7f0;border-radius:13px;padding:18px;margin-top:14px}
+.obs-title-row{margin-bottom:14px;padding:0;border:0}
+.obs-title-row h3{font-size:16px;margin:0}
+.obs-counter{padding:6px 11px;font-size:11px;background:#eef3e9;color:#54752c;border-color:#dae8cc}
+.obs-list{max-height:610px;gap:11px;padding:0 2px 2px 0}
+.obs-entry{padding:14px 16px;border-radius:12px;background:#f8fafd;border-color:#e3eaf2}
+.obs-entry.obs-recent{background:#f6faf2;border-color:#b7d59a}
+.obs-entry-head{margin-bottom:11px}
+.obs-author{font-size:11px;text-transform:uppercase}
+.obs-date{font-size:11px}
+.obs-latest{background:#e8f1dd}
+.obs-entry-text{font-size:12px;line-height:1.65}
+@media(max-width:640px){.obs-section{padding:12px}.obs-list{max-height:470px}.obs-entry{padding:12px}}
 .auto-status-cell{display:inline-block;max-width:295px;white-space:normal;line-height:1.5;font-size:11px;font-weight:750;color:#2c5b7a;background:#edf5fa;border:1px solid #cfe3f0;border-radius:7px;padding:4px 8px;overflow-wrap:anywhere}
 .auto-status-cell.empty{color:#8491a0;background:#f7f8fa;border-color:#eceff2;font-weight:500}
-.auto-sync{display:inline-flex;margin-top:4px;color:#738399;font-size:10px;font-weight:600}
-.auto-sync.ready{color:#56792a}
-.auto-sync.error{color:#ad6722}
-.auto-refresh{border:none;background:transparent;padding:4px 0;cursor:pointer;text-align:left;white-space:normal}
-.auto-refresh:hover{text-decoration:underline}
 .auto-mini{margin:7px 0 4px;border-left:3px solid #a0bed3;padding:5px 8px;font-size:11px;font-weight:700;color:#456581;background:#f0f6fb;border-radius:0 5px 5px 0;overflow-wrap:anywhere}
 .auto-mini b{font-size:10px;letter-spacing:.02em;color:#52758a}
 </style></head><body>
@@ -326,7 +323,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <button class="tab" id="tab-kanban" onclick="changeView('kanban')"><em>D.</em> Cartões / Kanban</button>
 <button class="tab hidden" id="tab-approval" onclick="changeView('approval')">✓ Aprovações <span id="approvalCount"></span></button></nav>
 <div class="kpis hidden" id="metrics"></div>
-<section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquise ou selecione os itens desejados.</p><button type="button" id="autoStatusSync" class="auto-sync auto-refresh" onclick="loadAutoStatuses()" title="Atualizar os status automáticos" aria-label="Recarregar status automático">Status automático: aguardando atualização</button></div>
+<section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquise ou selecione os itens desejados.</p></div>
 <div class="panel-actions"><label class="history-control hidden" id="historyControl" title="Consultar concluídos e faturados quando necessário"><input type="checkbox" id="showHistory" onchange="toggleHistory(this.checked)"><span>Exibir concluídos e faturados</span></label><button class="btn small" id="toggleFiltersBtn" onclick="toggleFilters()">▴ Recolher filtros</button><button class="btn small" onclick="clearFilters()">Limpar</button></div></div>
 <div id="filtersBody"><div class="filters"><div class="field search"><label>Pesquisa geral dinâmica</label><input id="q" placeholder="OS, cliente, produto, orçamento, NF, observação…"></div>
 <div class="field multi-field"><label>Tipo</label><div class="multi-select" id="typeFilterBox"><button type="button" class="multi-trigger" id="typeFilter" aria-expanded="false" onclick="toggleMulti('type')">Todos <span>▾</span></button><div class="multi-menu hidden" id="typeMenu"><input type="search" id="typeSearch" placeholder="Pesquisar tipo..." oninput="renderMulti('type')"><div class="multi-actions"><button type="button" onclick="multiPickVisible('type')">Marcar visíveis</button><button type="button" onclick="multiClear('type')">Todos</button></div><div class="multi-options" id="typeOptions"></div></div></div></div>
@@ -433,12 +430,15 @@ function obsExcerpt(value){
  return a.length?a[a.length-1].texto.replace(/\s+/g,' ').slice(0,150):''
 }
 function obsHistoryHtml(value){
- var entries=obsEntries(value);
- if(!entries.length)return '<p class="obs-empty">Nenhuma observacao registrada.</p>';
- return '<div class="obs-lines" role="log" aria-label="Historico de observacoes">'+entries.map(function(item){
-  var head=item.data?'['+item.data+' - '+item.autor+'] ':'';
-  return '<div class="obs-line">'+(head?'<span class="obs-prefix">'+esc(head)+'</span>':'')+
-   '<span class="obs-message">'+esc(item.texto)+'</span></div>'
+ var entries=obsEntries(value).slice().reverse(); // Mais recente primeiro.
+ if(!entries.length)return '<p class="obs-empty">Nenhuma observação registrada.</p>';
+ return '<div class="obs-list" role="log" aria-label="Histórico de observações">'+entries.map(function(item,i){
+  return '<article class="obs-entry'+(i===0?' obs-recent':'')+'">'+
+   '<div class="obs-entry-head"><span class="obs-author">'+esc(item.autor||'Registro anterior')+'</span>'+
+   (item.data?'<span class="obs-date">'+esc(item.data)+'</span>':'')+
+   (i===0?'<span class="obs-latest">Último registro</span>':'')+'</div>'+
+   '<div class="obs-entry-text">'+esc(item.texto)+'</div>'+
+   '</article>'
  }).join('')+'</div>'
 }
 function truthy(v){return [true,1,'1','S','SIM','TRUE','T','YES','Y'].indexOf(typeof v==='string'?v.toUpperCase().trim():v)>=0}
@@ -1185,7 +1185,7 @@ function openModal(id,focusField){
   var val=f[0]==='status'||f[0]==='situation'?cell(r,f[0]):esc(f[0]==='value'?money(r.value):['entry','agreed','invoicedAt'].includes(f[0])?human(r[f[0]]):r[f[0]]||'—');
   return '<div class="kv"><small>'+esc(f[1])+'</small><strong>'+val+'</strong></div>'
  }).join('')+'</div>';
- var entries=obsEntries(r.obs);var logs='<section class="edit-section obs-section"><div class="obs-title-row"><h3>Historico / Observacoes</h3><span class="obs-counter">'+entries.length+' registros</span></div>'+obsHistoryHtml(r.obs)+'</section>';
+ var entries=obsEntries(r.obs);var logs='<section class="edit-section obs-section"><div class="obs-title-row"><h3>Histórico de observações</h3><span class="obs-counter">'+entries.length+' registro(s)</span></div>'+obsHistoryHtml(r.obs)+'</section>';
  var edit='';
  if(canEdit){
    edit='<div class="edit-section"><h3>Alterar serviço</h3>'+
