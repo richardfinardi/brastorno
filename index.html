@@ -769,6 +769,7 @@ function group(s){
  if(s.includes('PRODU'))return 'work';return 'other'
 }
 function label(s,r){return '<span class="pill '+group(s)+' why-label"'+whyTitle(r?statusReason(r):laneReason(s))+'>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span>'}
+function plainLabel(s){return '<span class="pill '+group(s)+'">'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span>'}
 function metrics(arr){
  var active=arr.filter(function(r){return !r.done}),late=active.filter(function(r){return r.urgent});
  var k=[
@@ -1110,10 +1111,10 @@ function drawKanban(arr){
   var items=sorting(visible.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
-   '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong>'+
+   '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+plainLabel(r.status)+'</strong>'+
    '<span class="drag-handle '+((r.status==='FATURADO'||r.status==='SEM OS'||(r.pending&&!canAdjustPending(r)))?'disabled':'')+'" title="'+(['FATURADO','SEM OS'].includes(r.status)?'Status calculado, não permite movimentação':(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui'))+'" role="button" aria-label="Arrastar OS" draggable="'+((['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r)))?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
    '<div class="meta"><span title="'+esc(r.client)+'">'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+ 
-   (r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini" title="Status automático informativo"><b>AUTOMÁTICO</b><br>'+esc(r.autoStatus)+(r.autoDetail&&r.autoDetail!=='—'?'<small class="auto-detail-mini">'+esc(r.autoDetail)+'</small>':'')+'</div>':'')+
+   (r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini" title="Status automático informativo"><b>AUTOMÁTICO</b><br>'+esc(r.autoStatus)+'</div>':'')+
    (r.pending?'<span class="pending-badge" title="'+esc(r.previousStatus+' → '+r.status)+'">⏳ Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="btn small" type="button" onclick="event.stopPropagation();openPendingNote('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">✎ Justificar movimentação</button><button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
    (r.urgent?badge(r.situation,'bad'):'')+'</div>'
   }).join('');
