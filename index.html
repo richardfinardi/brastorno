@@ -306,6 +306,8 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .auto-sync{display:inline-flex;margin-top:4px;color:#738399;font-size:10px;font-weight:600}
 .auto-sync.ready{color:#56792a}
 .auto-sync.error{color:#ad6722}
+.auto-refresh{border:none;background:transparent;padding:4px 0;cursor:pointer;text-align:left;white-space:normal}
+.auto-refresh:hover{text-decoration:underline}
 .auto-mini{margin:7px 0 4px;border-left:3px solid #a0bed3;padding:5px 8px;font-size:11px;font-weight:700;color:#456581;background:#f0f6fb;border-radius:0 5px 5px 0;overflow-wrap:anywhere}
 .auto-mini b{font-size:10px;letter-spacing:.02em;color:#52758a}
 </style></head><body>
@@ -324,7 +326,7 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <button class="tab" id="tab-kanban" onclick="changeView('kanban')"><em>D.</em> Cartões / Kanban</button>
 <button class="tab hidden" id="tab-approval" onclick="changeView('approval')">✓ Aprovações <span id="approvalCount"></span></button></nav>
 <div class="kpis hidden" id="metrics"></div>
-<section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquise ou selecione os itens desejados.</p><small id="autoStatusSync" class="auto-sync" role="status">Status automático: aguardando atualização</small></div>
+<section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquise ou selecione os itens desejados.</p><button type="button" id="autoStatusSync" class="auto-sync auto-refresh" onclick="loadAutoStatuses()" title="Atualizar os status automáticos" aria-label="Recarregar status automático">Status automático: aguardando atualização</button></div>
 <div class="panel-actions"><label class="history-control hidden" id="historyControl" title="Consultar concluídos e faturados quando necessário"><input type="checkbox" id="showHistory" onchange="toggleHistory(this.checked)"><span>Exibir concluídos e faturados</span></label><button class="btn small" id="toggleFiltersBtn" onclick="toggleFilters()">▴ Recolher filtros</button><button class="btn small" onclick="clearFilters()">Limpar</button></div></div>
 <div id="filtersBody"><div class="filters"><div class="field search"><label>Pesquisa geral dinâmica</label><input id="q" placeholder="OS, cliente, produto, orçamento, NF, observação…"></div>
 <div class="field multi-field"><label>Tipo</label><div class="multi-select" id="typeFilterBox"><button type="button" class="multi-trigger" id="typeFilter" aria-expanded="false" onclick="toggleMulti('type')">Todos <span>▾</span></button><div class="multi-menu hidden" id="typeMenu"><input type="search" id="typeSearch" placeholder="Pesquisar tipo..." oninput="renderMulti('type')"><div class="multi-actions"><button type="button" onclick="multiPickVisible('type')">Marcar visíveis</button><button type="button" onclick="multiClear('type')">Todos</button></div><div class="multi-options" id="typeOptions"></div></div></div></div>
@@ -360,7 +362,7 @@ var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoad
 var multiSelections={type:new Set(),status:new Set(),auto:new Set(),period:new Set()},multiOptions={type:[],status:[],auto:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
 var kanbanPendingOnly=false;
 // Dados derivados, exclusivamente informativos. Nunca participam das alteracoes de status do CPS.
-var autoStatuses=new Map(),autoBusy=false,autoLoaded=false;
+var autoStatuses=new Map(),autoBusy=false,autoLoaded=false,autoError='';
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null,kanbanScrollFrame=0,kanbanScrollSpeed=0;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
 var $=function(x){return document.getElementById(x)};
@@ -508,7 +510,11 @@ function applyPendingVisuals(){
   var ids=new Set();
   rows=conjunto.filter(function(r){var k=String(read(r.raw,['registro_id'])||r.id);if(ids.has(k))return false;ids.add(k);return true}).map(function(row){
   var r=Object.assign({},row),registro=String(read(row.raw,['registro_id'])||'').trim().toUpperCase();
-  r.autoStatus=autoStatuses.get(registro)||'—';
+  var codAuto=read(row.raw,['cod_os','codigo_os','codigo_tos']),empresaAuto=read(row.raw,['cod_empresa','_cod_empresa']);
+  var keyEmpresa=(codAuto!==''&&empresaAuto!==''?'OS:'+empresaAuto+':'+codAuto:'');
+  var keyCodigo=codAuto!==''?'COD:'+codAuto:'';
+  var keyNumero=r.os?'NUM:'+normalize(r.os):'';
+  r.autoStatus=autoStatuses.get(registro)||autoStatuses.get(keyEmpresa)||autoStatuses.get(keyCodigo)||autoStatuses.get(keyNumero)||'—';
   var id=osCode(r),p=(id!==null?byOS.get(String(id)):null)||(r.os?byNumber.get(String(r.os).trim()):null);
   if(!p||!p.status_novo)return r;
   if(normalize(r.status)!==normalize(p.status_anterior))return r;
@@ -521,7 +527,7 @@ async function loadAutoStatuses(){
  if(!profile||!cacheKey||autoBusy)return;
  var chave=cacheKey,indicator=$('autoStatusSync');
  autoBusy=true;
- if(indicator){indicator.className='auto-sync';indicator.textContent='Status automático: atualizando indicadores…'}
+ if(indicator){indicator.className='auto-sync';indicator.textContent='Status automático: consultando a API…'}
  try{
   var result=await api('/controle_fabrica/status_automatico?_t='+Date.now());
   if(chave!==cacheKey)return;
@@ -529,15 +535,39 @@ async function loadAutoStatuses(){
   list.forEach(function(item){
    var registro=String(read(item,['registro_id'])||'').trim().toUpperCase();
    var valor=String(read(item,['status_automatico'])||'').trim();
-   if(registro&&valor)map.set(registro,valor)
+   if(!valor)return;
+   if(registro)map.set(registro,valor);
+   var cod=read(item,['cod_os','codigo_os']);
+   var empresa=read(item,['cod_empresa']);
+   var numero=String(read(item,['n_os','os'])||'').trim();
+   if(cod!==''&&cod!==null){
+    map.set('COD:'+cod,valor);
+    if(empresa!==''&&empresa!==null)map.set('OS:'+empresa+':'+cod,valor)
+   }
+   if(numero)map.set('NUM:'+normalize(numero),valor)
   });
-  autoStatuses=map;autoLoaded=true;
+  autoStatuses=map;autoLoaded=true;autoError='';
   applyPendingVisuals();setupFilters();render();
-  if(indicator){indicator.className='auto-sync ready';indicator.textContent='Status automático: '+map.size+' OS analisadas • somente leitura'}
+  var associados=baseRows.filter(function(r){
+   var reg=String(read(r.raw,['registro_id'])||'').trim().toUpperCase();
+   var cod=read(r.raw,['cod_os','codigo_os']);
+   return map.has(reg)||(cod!==''&&map.has('COD:'+cod))||(r.os&&map.has('NUM:'+normalize(r.os)))
+  }).length;
+  if(indicator){
+   indicator.className='auto-sync '+(associados?'ready':'error');
+   indicator.textContent=associados?
+    'Status automático: '+list.length+' OS analisadas • '+associados+' itens associados • somente leitura':
+    'Status automático: '+list.length+' OS retornadas, '+associados+' associadas à grade. Confira COD_OS.'
+  }
  }catch(e){
   if(chave!==cacheKey)return;
-  console.warn('Indicadores de status automatico indisponiveis:',e.message);
-  if(indicator){indicator.className='auto-sync error';indicator.textContent='Status automático indisponível • instalar rota na API'}
+  autoError=e.message;
+  console.warn('Indicadores de status automatico indisponiveis:',e);
+  if(indicator){
+   indicator.className='auto-sync error';
+   indicator.textContent='Status automático: '+(e.status===404?'rota não encontrada (atualize api.py)':
+    e.status===503?'SQL ausente no servidor':e.message)+' • clique para tentar novamente';
+  }
  }finally{autoBusy=false}
 }
 async function loadPending(){
@@ -1430,7 +1460,7 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;autoStatuses=new Map();autoLoaded=false;multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
+   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;autoStatuses=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
@@ -1452,6 +1482,7 @@ async function loadAll(){
    if(!hasData)$('screen').innerHTML='<div class="skel">Carregando dados do CPS pela primeira vez…<br>Na próxima visita, os dados salvos abrirão imediatamente.</div>';
    // Inicia atualização sem bloquear a interface nem apagar os dados salvos.
    loadData({silent:true});
+   loadAutoStatuses();
    loadPending();
    if(profile.gestor){carregarTipos();loadApprovals();}
   }catch(err){
@@ -1466,6 +1497,7 @@ async function loadAll(){
  return initializing
 }
 window.loadAll=loadAll;
+window.loadAutoStatuses=loadAutoStatuses;
 function refreshWhenActive(){
  if(!profile||!cacheKey||fetchingData||document.hidden)return;
  if(Date.now()-lastRefreshAt<60000)return;
