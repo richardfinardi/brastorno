@@ -267,6 +267,22 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .kanban-head .panel-actions{gap:7px}
 .kanban-pending-toggle.active{background:#e9f0df;border-color:#9cb876;color:#496e21}
 .kanban-pending-count{background:#fff4df;color:#8c641b;border-color:#edd5a0;white-space:normal}
+
+/* Historico de observacoes: cada entrada em um card limpo, sem quebra indevida. */
+.obs-section{background:white;padding:16px;margin-top:16px}
+.obs-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.obs-title-row h3{margin:0;flex:1;font-size:14px;color:#213855;font-weight:850}
+.obs-counter{display:inline-block;font-size:11px;font-weight:800;padding:5px 8px;background:#eef3e9;border:1px solid #dae8cc;color:#54752c;border-radius:8px}
+.obs-list{max-height:420px;overflow-y:auto;overflow-x:hidden;padding:1px 6px 3px 0;display:grid;gap:9px}
+.obs-entry{min-width:0;background:#fafbfd;border:1px solid #e3eaf2;border-radius:10px;padding:12px 13px;overflow-wrap:anywhere;word-break:normal}
+.obs-entry.obs-recent{border-color:#b9d29b;background:#f7fbf3}
+.obs-entry-head{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:8px;font-size:11px;min-width:0}
+.obs-author{font-weight:850;color:#243956;overflow-wrap:anywhere}
+.obs-date{color:#738399;font-weight:700;font-variant-numeric:tabular-nums}
+.obs-latest{margin-left:auto;border-radius:6px;padding:3px 6px;color:#54752c;background:#e9f1df;font-size:10px;font-weight:800}
+.obs-entry-text{font:12px/1.65 "Segoe UI",Arial,sans-serif;white-space:pre-wrap;color:#374963;overflow-wrap:anywhere;word-break:normal}
+.obs-empty{padding:18px;text-align:center;color:#8090a4;font-size:12px;background:#f7f9fb;border-radius:10px}
+@media(max-width:640px){.obs-section{padding:11px}.obs-entry{padding:10px}.obs-list{max-height:360px}}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -322,6 +338,65 @@ var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMon
 var $=function(x){return document.getElementById(x)};
 function esc(s){return String(s===null||s===undefined?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]})}
 function normalize(s){return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim()}
+
+/* Historico CPS: exibir somente texto legivel e sem acentos. Nunca interpreta HTML. */
+function obsPlain(value){
+ if(value===null||value===undefined)return '';
+ var raw=typeof value==='object'?JSON.stringify(value):String(value);
+ if(raw.indexOf('Ã')>=0||raw.indexOf('Â')>=0){
+  try{
+   var chars=Array.from(raw),bytes=chars.map(function(ch){var code=ch.codePointAt(0);if(code>255)throw Error('non-Latin1');return code});
+   var converted=new TextDecoder('utf-8',{fatal:true}).decode(new Uint8Array(bytes));
+   if((converted.match(/Ã/g)||[]).length<(raw.match(/Ã/g)||[]).length)raw=converted
+  }catch(e){}
+ }
+ raw=raw.replace(/\r\n?/g,'\n')
+  .replace(/<br\s*\/?>/gi,'\n').replace(/<\/(?:div|p|li|tr|section)\s*>/gi,'\n')
+  .replace(/<memory at 0x[0-9a-f]+>/gi,'')
+  .replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ')
+  .replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>')
+  .replace(/&quot;/gi,'"').replace(/&#39;/g,"'")
+  .replace(/&#(\d+);/g,function(_,n){var x=Number(n);return x>31&&x<65536?String.fromCharCode(x):''})
+  .replace(/→/g,' -> ').replace(/←/g,' <- ').replace(/[–—−]/g,'-')
+  .replace(/[“”]/g,'"').replace(/[‘’]/g,"'")
+  .replace(/…/g,'...').replace(/[•·]/g,' - ')
+  .replace(/[º°]/g,'o').replace(/ª/g,'a').replace(/\u00a0/g,' ');
+ raw=raw.normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^\x09\x0a\x0d\x20-\x7e]/g,'')
+  .replace(/[\t ]+/g,' ')
+  .split('\n').map(function(line){return line.trim()}).join('\n')
+  .replace(/\n{3,}/g,'\n\n').trim();
+ return raw
+}
+function obsEntries(value){
+ var text=obsPlain(value),items=[];
+ if(!text)return items;
+ var re=/\[(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)\s*-\s*([^\]\n]+)\]\s*/g;
+ var found=Array.from(text.matchAll(re));
+ if(!found.length)return [{data:'',autor:'Registro anterior',texto:text}];
+ var first=text.slice(0,found[0].index).trim();
+ if(first)items.push({data:'',autor:'Registro anterior',texto:first});
+ found.forEach(function(m,i){
+  var end=i+1<found.length?found[i+1].index:text.length;
+  var content=text.slice(m.index+m[0].length,end).trim();
+  items.push({data:m[1],autor:m[2].trim(),texto:content||'(sem texto)'})
+ });
+ return items.reverse()
+}
+function obsExcerpt(value){
+ var a=obsEntries(value);return a.length?a[0].texto.replace(/\s+/g,' ').slice(0,150):''
+}
+function obsHistoryHtml(value){
+ var entries=obsEntries(value);
+ if(!entries.length)return '<div class="obs-empty">Nenhuma observacao registrada.</div>';
+ return '<div class="obs-list">'+entries.map(function(item,i){
+  return '<article class="obs-entry '+(i===0?'obs-recent':'')+'">'+
+   '<div class="obs-entry-head"><span class="obs-author">'+esc(item.autor)+'</span>'+
+   (item.data?'<time class="obs-date">'+esc(item.data)+'</time>':'')+
+   (i===0?'<span class="obs-latest">Ultimo registro</span>':'')+'</div>'+
+   '<div class="obs-entry-text">'+esc(item.texto)+'</div></article>'
+ }).join('')+'</div>'
+}
 function truthy(v){return [true,1,'1','S','SIM','TRUE','T','YES','Y'].indexOf(typeof v==='string'?v.toUpperCase().trim():v)>=0}
 function read(o,names){if(!o||typeof o!=='object')return '';var d=readCache.get(o);if(!d){d={};Object.keys(o).forEach(function(k){d[normalize(k).replace(/[^A-Z0-9]/g,'')]=o[k]});readCache.set(o,d)}for(var i=0;i<names.length;i++){var v=d[normalize(names[i]).replace(/[^A-Z0-9]/g,'')];if(v!==undefined&&v!==null&&v!=='')return v}return ''}
 function date(v){if(v===undefined||v===null||v==='')return '';var s=String(v).trim();if(s==='NaT'||s==='None'||s==='null')return '';if(/^\d{4}-\d\d-\d\d/.test(s))return s.slice(0,10);if(/^\d\d\/\d\d\/\d{4}/.test(s)){var p=s.slice(0,10).split('/');return p[2]+'-'+p[1]+'-'+p[0]}return ''}
@@ -473,7 +548,7 @@ else if(!situation){
 var situacaoNormalizada=normalize(situation);
 urgent=!isDone&&(situacaoNormalizada.includes('ATRASAD')||situacaoNormalizada.includes('VENCID')||situacaoNormalizada.includes('AVISAR AO COMERCIAL')||situacaoNormalizada.includes('PREVISAO ACIMA DO ACORDADO'));
 var id=String(read(raw,['guid_linha','id','codigo_item','cod_os','codigo'])||'')+'|'+os+'|'+quote+'|'+i;
-return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:String(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
+return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:obsPlain(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
 function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus))})}
 function filtered(exceptKey){var q=normalize($('q').value),type=multiSelections.type,status=multiSelections.status,per=multiSelections.period,releaseFrom=$('releaseFrom').value,releaseTo=$('releaseTo').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
 return visibleRows().filter(function(r){if(type.size&&!type.has(r.type))return false;if(status.size&&!status.has(r.status))return false;
@@ -538,7 +613,7 @@ function cell(r,k){
  if(k==='value')return money(v);
  if(k==='status')return label(v);
  if(k==='situation')return badge(v,r.urgent?'bad':'');
- if(k==='obs')return '<span title="'+esc(v)+'">'+esc(String(v).slice(0,46))+'</span>';
+ if(k==='obs'){var summary=obsExcerpt(v);return '<span title="'+esc(obsPlain(v).slice(-700))+'">'+esc(summary||'—')+'</span>';}
  if(k==='os')return '<strong>'+esc(v||'—')+'</strong>';
  return esc(v===undefined||v===null||v===''?'—':v)
 }
@@ -1011,7 +1086,7 @@ function openModal(id,focusField){
   var val=f[0]==='status'||f[0]==='situation'?cell(r,f[0]):esc(f[0]==='value'?money(r.value):['entry','agreed','invoicedAt'].includes(f[0])?human(r[f[0]]):r[f[0]]||'—');
   return '<div class="kv"><small>'+esc(f[1])+'</small><strong>'+val+'</strong></div>'
  }).join('')+'</div>';
- var logs='<div class="edit-section"><h3>Histórico / Observações</h3><div class="log-preview">'+esc(r.obs||'Nenhuma observação registrada.')+'</div></div>';
+ var entries=obsEntries(r.obs);var logs='<section class="edit-section obs-section"><div class="obs-title-row"><h3>Historico de observacoes</h3><span class="obs-counter">'+entries.length+' registro(s)</span></div>'+obsHistoryHtml(r.obs)+'</section>';
  var edit='';
  if(canEdit){
    edit='<div class="edit-section"><h3>Alterar serviço</h3>'+
