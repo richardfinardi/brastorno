@@ -1134,6 +1134,72 @@ window.toggleKanbanPending=toggleKanbanPending;
 function showMoreLane(status){laneLimits[status]=(laneLimits[status]||45)+45;drawKanban(filtered())}
 window.showMoreLane=showMoreLane;
 
+// Controle do Limbo: a API é a autoridade, o navegador só envia IDs.
+function limboRef(r){return String(read(r&&r.raw,['registro_id'])||'').trim()}
+async function limboAction(ids,on){
+ if(!profile||!profile.gestor||limboBusy)return;
+ ids=Array.from(new Set(ids.filter(Boolean)));
+ if(!ids.length){alert('Nenhum registro válido selecionado.');return}
+ if(ids.length>500){alert('Selecione até 500 registros por lote.');return}
+ if(!confirm((on?'Enviar ao Limbo':'Restaurar do Limbo')+' '+ids.length+' registro(s)? A ação também afetará OS e orçamentos vinculados.'))return;
+ limboBusy=true;
+ try{
+  var resp=await api('/controle_fabrica/limbo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({limbo:on,itens:ids.map(function(x){return {registro_id:x}})})});
+  limboSelected.clear();selectedFabricRows.clear();historyRows=[];historyLoaded=false;showHistory=false;$('showHistory').checked=false;
+  baseRows=[];rows=[];pendingRequests=[];hasData=false;autoStatuses=new Map();autoDetails=new Map();
+  if(cacheKey)removeSnapshot(cacheKey).catch(function(e){console.warn(e)});
+  limboRows=[];limboLoaded=false;render();
+  await Promise.allSettled([loadData({force:true}),loadLimbo(),loadPending()]);
+  setNotice((on?'Enviado ao Limbo. ':'Restaurado do Limbo. ')+(resp.os_atualizadas||0)+' OS e '+(resp.orcamentos_atualizados||0)+' orçamento(s).','ok');
+ }catch(e){setNotice('Falha ao '+(on?'enviar ao':'restaurar do')+' Limbo: '+e.message,'error')}
+ finally{limboBusy=false}
+}
+function sendOneLimbo(id){var r=rows.find(function(x){return x.id===id});if(r&&profile&&profile.gestor)return limboAction([limboRef(r)],true)}
+window.sendOneLimbo=sendOneLimbo;
+function sendSelectedLimbo(){if(profile&&profile.gestor)return limboAction(selectedFabricItems().map(limboRef),true)}
+window.sendSelectedLimbo=sendSelectedLimbo;
+async function loadLimbo(){
+ if(!profile||!profile.gestor||limboBusy)return;
+ try{
+  limboRows=flattenResult(await api('/controle_fabrica/limbo?_t='+Date.now()));limboLoaded=true;
+  var allowed=new Set(limboRows.map(function(r){return String(r.registro_id)}));
+  limboSelected.forEach(function(x){if(!allowed.has(x))limboSelected.delete(x)});
+  if(view==='limbo')drawLimbo();
+ }catch(e){limboLoaded=false;if(view==='limbo')$('screen').innerHTML='<div class="notice error">Erro no Limbo: '+esc(e.message)+'. Instale a API atualizada no servidor.</div>'}
+}
+window.loadLimbo=loadLimbo;
+function drawLimbo(){
+ if(!profile||!profile.gestor)return;
+ var input=$('limboQuery'),query=input?input.value:'';
+ var html=limboRows.map(function(r){
+  var id=String(r.registro_id||''),nome=String(r.numero||r.codigo||'—');
+  return '<tr data-limbo-search="'+esc(normalize([r.tipo,nome,r.descricao,r.status].join(' ')))+'">'+
+   '<td><input type="checkbox" data-limbo-id="'+esc(id)+'" onchange="toggleLimboPick(this)" '+(limboSelected.has(id)?'checked':'')+'></td>'+
+   '<td><span class="limbo-flag">'+esc(r.tipo||'OS')+'</span></td><td><b>'+esc(nome)+'</b></td>'+
+   '<td>'+esc(r.descricao||'—')+'</td><td>'+esc(r.status||'—')+'</td>'+
+   '<td><button class="btn primary small" onclick="restoreOneLimbo('+JSON.stringify(id).replace(/"/g,'&quot;')+')">Restaurar</button></td></tr>'
+ }).join('');
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>Limbo</h2><p>Apenas gestor. Registros ocultos das demais telas e indicadores da fábrica.</p></div><span class="tag">'+limboRows.length+' registros</span></div>'+
+ '<div class="limbo-toolbar"><input class="filter-control" style="max-width:350px" id="limboQuery" placeholder="Pesquisar OS, orçamento, descrição..." value="'+esc(query)+'" oninput="filterLimboRows(this.value)">'+
+ '<label><input type="checkbox" onchange="selectLimboAll(this.checked)"> Selecionar tudo</label>'+
+ '<b id="limboCount">'+limboSelected.size+' selecionados</b>'+
+ '<button class="btn primary small" onclick="restoreSelectedLimbo()" '+(!limboSelected.size?'disabled':'')+'>Restaurar selecionados</button>'+
+ '<button class="btn small" onclick="loadLimbo()">↻ Atualizar</button></div>'+
+ '<div class="limbo-table-wrap"><table class="limbo-table"><thead><tr><th>✓</th><th>Tipo</th><th>OS / Orçamento</th><th>Descrição</th><th>Status original</th><th>Ação</th></tr></thead><tbody>'+
+ (!limboLoaded?'<tr><td colspan="6">Consultando Limbo…</td></tr>':html||'<tr><td colspan="6" class="empty">Limbo vazio.</td></tr>')+
+ '</tbody></table></div></section>';
+ if(query)filterLimboRows(query)
+}
+function filterLimboRows(q){q=normalize(q);document.querySelectorAll('.limbo-table tbody tr[data-limbo-search]').forEach(function(el){el.hidden=!el.dataset.limboSearch.includes(q)})}
+window.filterLimboRows=filterLimboRows;
+function toggleLimboPick(el){if(el.checked)limboSelected.add(el.dataset.limboId);else limboSelected.delete(el.dataset.limboId);var c=$('limboCount');if(c)c.textContent=limboSelected.size+' selecionados';var b=$('screen').querySelector('.limbo-toolbar button.primary');if(b)b.disabled=!limboSelected.size}
+window.toggleLimboPick=toggleLimboPick;
+function selectLimboAll(on){limboSelected=new Set(on?limboRows.map(function(x){return String(x.registro_id)}):[]);drawLimbo()}
+window.selectLimboAll=selectLimboAll;
+function restoreOneLimbo(id){return limboAction([id],false)}
+window.restoreOneLimbo=restoreOneLimbo;
+function restoreSelectedLimbo(){return limboAction(Array.from(limboSelected),false)}
+window.restoreSelectedLimbo=restoreSelectedLimbo;
 function approvalDetails(req,byCod,byOS){
  var code=String(req.cod_os==null?'':req.cod_os),number=String(req.n_os||req.os||'').trim();
  return byCod.get(code)||byOS.get(number)||null
