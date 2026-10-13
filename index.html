@@ -1159,7 +1159,7 @@ window.sendOneLimbo=sendOneLimbo;
 function sendSelectedLimbo(){if(profile&&profile.gestor)return limboAction(selectedFabricItems().map(limboRef),true)}
 window.sendSelectedLimbo=sendSelectedLimbo;
 async function loadLimbo(){
- if(!profile||!profile.gestor||limboBusy)return;
+ if(!profile||!profile.gestor)return;
  try{
   limboRows=flattenResult(await api('/controle_fabrica/limbo?_t='+Date.now()));limboLoaded=true;
   var allowed=new Set(limboRows.map(function(r){return String(r.registro_id)}));
