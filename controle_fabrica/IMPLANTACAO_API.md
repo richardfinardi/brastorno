@@ -50,3 +50,35 @@ Para dados sem OS/status, exibir somente ao U_GESTOR até definição de fila de
 `auth.py` original foi mantido sem alteração. A nova rota usa `obter_usuario_logado` para validar o token e busca as permissões atuais diretamente no banco.
 
 Configure uma `SECRET_KEY` exclusiva via variável de ambiente no serviço; evite a chave padrão publicada no código.
+
+## Integração do STATUS AUTOMÁTICO — V4 (13/10/2026)
+
+O aplicativo oficial agora está na **raiz** do repositório (`/index.html`).
+O arquivo `controle_fabrica/index.html` apenas redireciona para a raiz.
+
+O usuário **validou a SQL V4 no PostgreSQL**: 620 OS e retorno instantâneo. A UI exibe o indicador
+em coluna própria **STATUS AUTOMÁTICO**, pesquisa/filtro múltiplo, detalhes, cartões e CSV,
+sem substituir a coluna **STATUS CPS** e sem acionar movimentações.
+
+### Instalação na API monolítica que está rodando em C:\\api-dados
+
+1. Fazer backup de `C:\\api-dados\\api.py`.
+2. Substituir pelo `api.py` **completo**, com o novo endpoint protegido
+   `GET /controle_fabrica/status_automatico`. O arquivo deve preservar as rotas
+   existentes, inclusive o SQL dinâmico de `sql/` e a rota de histórico.
+3. Colocar `controle_fabrica_status_automatico.sql` **junto do api.py**, em
+   `C:\\api-dados\\controle_fabrica_status_automatico.sql`; **não colocar em `sql/`**,
+   para não tornar a consulta acessível pelo endpoint dinâmico público.
+4. Reiniciar Uvicorn e verificar `/docs`, procurando `GET /controle_fabrica/status_automatico`.
+5. Confirmar que requer token e que os funcionários só recebem OS dos próprios perfis CPS.
+6. Na aplicação, clicar **Atualizar** e conferir o selo com a quantidade de OS analisadas.
+
+O status automático vem da SQL V4 em separado por `REGISTRO_ID = OS:<empresa>:<codigo_os>`.
+Orçamentos sem OS e serviços fora do universo ativo da V4 aparecem como `—` (sem cálculo),
+nunca como status inventado. A API aplica as permissões via `COD_STATUS` incluído na SQL.
+A consulta não faz `UPDATE`, não altera status manual e não libera dados de outros perfis.
+
+**Atenção à versão da API:** as instruções antigas deste documento referentes a
+`controle_fabrica_perfil.py` descreviam uma implementação por módulo separado.
+Na instalação atual de `api.py` monolítico as rotas já pertencem ao arquivo principal:
+não é necessário cadastrar um segundo router.
