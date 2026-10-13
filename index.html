@@ -311,6 +311,10 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .edit-save-actions .btn{min-width:180px}
 .auto-detail-cell{display:block;max-width:300px;white-space:normal;font-size:11px;line-height:1.45;color:#516781;overflow-wrap:anywhere}
 .auto-detail-mini{display:block;margin-top:5px;color:#586f82;font-size:10px;font-weight:600;line-height:1.45}
+.why-label{cursor:help;text-decoration:underline dotted transparent;text-underline-offset:3px}
+.why-label:hover,.why-label:focus-visible{text-decoration-color:#899db5}
+.lane-head .why-lane{cursor:help;text-decoration:underline dotted #a4b3c5;text-underline-offset:4px}
+.lane-head .why-lane:hover{text-decoration-color:#597b34}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -321,10 +325,10 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 <div id="notice" class="notice">Validando o acesso ao Controle de Fábrica…</div>
 
 <nav class="tabs hidden" id="tabs" aria-label="Telas do controle">
-<button class="tab active" id="tab-fabric" onclick="changeView('fabric')"><em>A.</em> Gestão de Fábrica</button>
-<button class="tab" id="tab-status" onclick="changeView('status')"><em>B.</em> Gestão por Status</button>
-<button class="tab" id="tab-roles" onclick="changeView('roles')"><em>C.</em> Controle por Status</button>
-<button class="tab" id="tab-kanban" onclick="changeView('kanban')"><em>D.</em> Cartões / Kanban</button>
+<button class="tab active" id="tab-fabric" onclick="changeView('fabric')">Gestão de Fábrica</button>
+<button class="tab" id="tab-status" onclick="changeView('status')">Gestão por Status</button>
+<button class="tab" id="tab-roles" onclick="changeView('roles')">Controle por Status</button>
+<button class="tab" id="tab-kanban" onclick="changeView('kanban')">Cartões / Kanban</button>
 <button class="tab hidden" id="tab-approval" onclick="changeView('approval')">✓ Aprovações <span id="approvalCount"></span></button></nav>
 <div class="kpis hidden" id="metrics"></div>
 <section class="panel hidden" id="filterPanel"><div class="panel-head"><div><h2>Filtros de consulta</h2><p>Pesquise ou selecione os itens desejados.</p></div>
@@ -690,6 +694,61 @@ function multiPickVisible(k){multiVisible(k).forEach(function(v){multiSelections
 window.toggleMulti=toggleMulti;window.renderMulti=renderMulti;window.multiChoice=multiChoice;window.multiClear=multiClear;window.multiPickVisible=multiPickVisible;
 document.addEventListener('click',function(e){if(!e.target.closest('.multi-select'))multiClose()});
 
+// Explicacoes baseadas nas mesmas regras de classificacao usadas pela tela.
+function laneReason(status){
+ var s=normalize(status);
+ var rules={
+  'SEM OS':'Itens de orçamento aprovado sem ordem de serviço vinculada. O cartão só muda de etapa quando houver uma OS no CPS.',
+  'ENGENHARIA':'A OS está com COD_STATUS 6 (ENGENHARIA) no CPS, ou foi movida para esta etapa no Kanban e aguarda aprovação. Não indica automaticamente lista de materiais pronta.',
+  'PCP':'A OS está com COD_STATUS 7 (PCP) no CPS, ou há movimentação pendente do Kanban. As condições de materiais ficam no Status Automático separado.',
+  'COMPRAS':'A OS está com COD_STATUS 8 (COMPRAS) no CPS, ou há movimentação pendente do Kanban. O estágio da compra (OC, entrega etc.) aparece no Status Automático.',
+  'PRODUCAO':'A OS está com COD_STATUS 9 (PRODUÇÃO) no CPS, ou há movimentação pendente do Kanban. Apontamentos de máquina são mostrados no Status Automático e não movimentam este cartão.',
+  'QUALIDADE':'A OS está com COD_STATUS 10 (QUALIDADE) no CPS, ou há movimentação pendente do Kanban.',
+  'FATURAMENTO':'Inclui OS com COD_STATUS 11 (FATURAMENTO) e OS concluídas que possuem orçamento ainda não totalmente faturado (AGUARDANDO FATURAMENTO).',
+  'EXPEDICAO':'A OS está com COD_STATUS 12 (EXPEDIÇÃO) no CPS, ou há movimentação pendente do Kanban.',
+  'CONCLUIDO':'OS concluídas no CPS sem orçamento vinculado. OS concluídas com orçamento ainda não totalmente faturado aparecem em AGUARDANDO FATURAMENTO.',
+  'FATURADO':'A consulta identificou faturamento integral das quantidades dos itens de orçamento da OS. Não é um status editável pelo Kanban.',
+  'PARALISADO':'A OS está com COD_STATUS 14 (PARALISADO) no CPS, ou há movimentação pendente do Kanban.',
+  'CANCELADO':'A OS está cancelada no CPS. A visualização normal omite registros cancelados.'
+ };
+ return rules[s]||'Etapa informada pelo sistema CPS. O Status Automático é independente e não muda as colunas do Kanban.'
+}
+function statusReason(r){
+ if(!r)return 'Situação oficial do CPS ou classificação calculada pela aplicação.';
+ if(r.pending){
+  return 'MOVIMENTAÇÃO PENDENTE DE APROVAÇÃO\\nO Kanban está exibindo provisoriamente '+(r.status||'esta etapa')+'.\\nStatus anterior no CPS: '+(r.previousStatus||'não informado')+'. A alteração só será oficial após aprovação do gestor.'
+ }
+ var raw=r.raw||{},st=normalize(r.status),nRaw=read(raw,['cod_status','status_codigo','codigo_status']),n=nRaw===''?null:Number(nRaw);
+ var origem=normalize(read(raw,['status','status_calculado']));
+ var faturado=normalize(read(raw,['situacao','situacao_prazo']))==='FATURADO'||origem==='FATURADO'||truthy(read(raw,['faturado_total']));
+ if(st==='FATURADO'&&faturado)return 'FATURADO\\nA consulta sinalizou faturamento integral dos itens de orçamento. A regra de faturamento prevalece sobre o status manual da OS.';
+ if(st==='SEM OS')return 'SEM OS\\nOrçamento aprovado sem OS vinculada. Este item ainda não possui uma etapa oficial de serviço para movimentar.';
+ var concluida=n===13||truthy(read(raw,['os_concluida','concluido']))||origem==='CONCLUIDO'||normalize(read(raw,['prosicao','posicao']))==='CONCLUIDO'||normalize(read(raw,['situacao','situacao_prazo']))==='CONCLUIDO';
+ if(st==='FATURAMENTO'&&concluida)return 'AGUARDANDO FATURAMENTO\\nA OS está concluída no CPS e tem orçamento vinculado, mas o faturamento integral não foi identificado. Por isso aparece em Faturamento, mesmo que o código da OS seja 13.';
+ if(st==='CONCLUIDO'&&concluida)return 'CONCLUÍDO\\nO CPS informa a OS como concluída e não há orçamento vinculado para acompanhar faturamento.';
+ if(n!==null&&codeStatus[n]===r.status)return 'STATUS OFICIAL DO CPS\\nTOS.COD_STATUS = '+n+' ('+r.status+').\\nEsta etapa vem do cadastro de serviços, inclusive movimentações já aprovadas. Não depende do Status Automático.';
+ var manual=String(read(raw,['status_servico','status_os','fase'])||'').trim();
+ return 'STATUS EXIBIDO\\n'+r.status+(manual?'\\nCampo textual do CPS: '+manual:'')+'\\nIndicadores de materiais e apontamentos são exibidos separadamente no Status Automático.'
+}
+function situationReason(r){
+ if(!r)return 'Situação calculada com as datas de entrega e liberação.';
+ var situation=normalize(r.situation),af=r.forecast,ag=r.agreed;
+ var prazoInfo='Entrega acordada: '+(ag?human(ag):'não informada')+'; previsão de liberação: '+(af?human(af):'não informada')+'.';
+ var overdue=[];
+ if(ag&&ag<=TODAY)overdue.push('entrega acordada '+human(ag));
+ if(af&&af<=TODAY)overdue.push('previsão de liberação '+human(af));
+ if(situation.includes('FATURADO'))return 'FATURADO\\nA OS foi classificada como totalmente faturada pela consulta.';
+ if(situation.includes('AGUARDANDO FATURAMENTO'))return 'AGUARDANDO FATURAMENTO\\nA OS está concluída, possui orçamento e não consta como integralmente faturada.';
+ if(situation==='CONCLUIDO')return 'CONCLUÍDO\\nA OS consta como concluída no CPS.';
+ if(situation.includes('SEM OS')&&situation.includes('ATRASAD'))return 'SEM OS — ATRASADO\\nExiste orçamento sem OS vinculada'+(overdue.length?' com prazo atingido ou vencido: '+overdue.join(' e '):'. A consulta sinalizou atraso')+'.\\n'+prazoInfo;
+ if(situation.includes('VENCID')||situation.includes('ATRASAD'))return 'PRAZO VENCIDO\\n'+(overdue.length?'Data(s) atingida(s) ou ultrapassada(s): '+overdue.join(' e ')+'.':'A consulta do CPS marcou o prazo como vencido.')+'\\n'+prazoInfo;
+ if(situation.includes('AVISAR AO COMERCIAL')||situation.includes('ACIMA DO ACORDADO'))return 'AVISAR AO COMERCIAL\\n'+(ag&&af&&af>ag?'Previsão de liberação '+human(af)+' é posterior à entrega acordada '+human(ag)+'.':'A consulta identificou divergência de prazo.')+'\\n'+prazoInfo;
+ if(situation.includes('SEM PREVISAO'))return 'SEM PREVISÃO\\nA consulta não identificou previsão de liberação definida.\\n'+prazoInfo;
+ if(situation.includes('AGUARDANDO OS'))return 'AGUARDANDO OS\\nO orçamento existe, mas ainda não há ordem de serviço vinculada.\\n'+prazoInfo;
+ if(situation.includes('DENTRO DO PROGRAMADO'))return 'DENTRO DO PROGRAMADO\\nA consulta não classificou este item como vencido ou em alerta.\\n'+prazoInfo;
+ return 'SITUAÇÃO DA CONSULTA\\n'+(r.situation||'Não informada')+'\\n'+prazoInfo
+}
+function whyTitle(reason){return ' title="'+esc(reason)+'"'}
 function badge(s,kind){return '<span class="tag '+(kind||'')+'">'+esc(s)+'</span>'}
 function group(s){
  s=normalize(s);if(s.includes('CONCLU')||s==='FATURADO')return 'done';
@@ -698,7 +757,7 @@ function group(s){
  if(s.includes('PCP')||s.includes('ENGENH'))return 'plan';
  if(s.includes('PRODU'))return 'work';return 'other'
 }
-function label(s){return '<span class="pill '+group(s)+'">'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span>'}
+function label(s,r){return '<span class="pill '+group(s)+' why-label"'+whyTitle(r?statusReason(r):laneReason(s))+'>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span>'}
 function metrics(arr){
  var active=arr.filter(function(r){return !r.done}),late=active.filter(function(r){return r.urgent});
  var k=[
@@ -714,10 +773,10 @@ function cell(r,k){
  if(k==='forecast')return '<span class="tag '+(r.urgent?'bad':'')+'">'+esc(human(v))+(r.urgent?' · Atenção':'')+'</span>';
  if(['agreed','entry','invoicedAt'].includes(k))return esc(human(v));
  if(k==='value')return money(v);
- if(k==='status')return label(v);
+ if(k==='status')return label(v,r);
   if(k==='autoStatus')return '<span class="auto-status-cell '+(!v||v==='—'?'empty':'')+'" title="Indicador calculado: não altera o status oficial do CPS">'+esc(v||'—')+'</span>';
   if(k==='autoDetail')return '<span class="auto-detail-cell" title="'+esc(v||'')+'">'+esc(v||'—')+'</span>';
- if(k==='situation')return badge(v,r.urgent?'bad':'');
+ if(k==='situation')return '<span class="why-label"'+whyTitle(situationReason(r))+'>'+badge(v,r.urgent?'bad':'')+'</span>';
  if(k==='obs'){var summary=obsExcerpt(v);return '<span title="'+esc(obsPlain(v).slice(-700))+'">'+esc(summary||'—')+'</span>';}
  if(k==='os')return '<strong>'+esc(v||'—')+'</strong>';
  return esc(v===undefined||v===null||v===''?'—':v)
@@ -735,7 +794,7 @@ function rowEditable(r,k){
    return '<span class="cell-edit">'+out+' <button class="row-edit" title="Alterar '+(k==='type'?'tipo':'previsão')+'" onclick="event.stopPropagation();openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+','+JSON.stringify(k).replace(/"/g,'&quot;')+')">✎</button></span>'
  }
  if(k==='status'&&r.pending)return out+' <span class="pending-badge">Aguardando aprovação</span>';
- if(['client','product','obs','situation'].includes(k)){
+ if(['client','product','obs'].includes(k)){
    return '<span class="clip-cell" title="'+esc(String(r[k]||''))+'">'+out+'</span>'
  }
  return out
@@ -1022,7 +1081,7 @@ function drawStatus(arr){
  var moneyBars=rank.map(function(x){return '<div class="sline" style="grid-template-columns:180px 1fr 130px"><span class="name">'+esc(x[0])+'</span><div class="track"><div class="fill" style="background:#4979a8;width:'+Math.round(x[1].value/maxValue*100)+'%"></div></div><div class="val">'+money(x[1].value)+'</div></div>'}).join('');
  $('screen').innerHTML='<section class="split"><div class="panel"><div class="panel-head"><div><h2>B. Distribuição por status</h2><p>Quantidade de itens por etapa operacional</p></div></div><div class="status-lines">'+(bars||'<div class="empty">Sem itens.</div>')+'</div></div><div class="panel"><div class="panel-head"><div><h2>Carteira por macroetapa</h2><p>Distribuição visual do mesmo conjunto de OS</p></div></div><div class="donutbox"><div class="donut" style="background:conic-gradient('+conic+')"><strong>'+arr.length+'</strong></div><div class="legend">'+legends+'</div></div></div></section><section class="panel"><div class="panel-head"><div><h2>Valor por status</h2><p>Valor dos itens agrupado por status no CPS</p></div></div><div style="padding:12px 20px;overflow-x:auto">'+(moneyBars||'<div class="empty">Sem valores.</div>')+'</div></section>'
 }
-function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p>'+(r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini"><b>STATUS AUTOMÁTICO</b><br>'+esc(r.autoStatus)+(r.autoDetail&&r.autoDetail!=='—'?'<small class="auto-detail-mini">'+esc(r.autoDetail)+'</small>':'')+'</div>':'')+'<div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></div>'+(r.pending?'<span class="pending-badge">Aguardando aprovação</span>':'')+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
+function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status,r)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p>'+(r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini"><b>STATUS AUTOMÁTICO</b><br>'+esc(r.autoStatus)+(r.autoDetail&&r.autoDetail!=='—'?'<small class="auto-detail-mini">'+esc(r.autoDetail)+'</small>':'')+'</div>':'')+'<div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></div>'+(r.pending?'<span class="pending-badge">Aguardando aprovação</span>':'')+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
 function drawRoles(arr){
  var sorted=sorting(arr),cards=sorted.slice(0,rolesLimit).map(tile).join('');
  var more=arr.length>rolesLimit?'<button class="btn small" style="margin:10px 16px 18px" onclick="moreRoles()">Mostrar mais '+Math.min(100,arr.length-rolesLimit)+' de '+(arr.length-rolesLimit)+' restantes</button>':'';
@@ -1040,16 +1099,16 @@ function drawKanban(arr){
   var items=sorting(visible.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
-   '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong>'+
+   '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status,r)+'</strong>'+
    '<span class="drag-handle '+((r.status==='FATURADO'||r.status==='SEM OS'||(r.pending&&!canAdjustPending(r)))?'disabled':'')+'" title="'+(['FATURADO','SEM OS'].includes(r.status)?'Status calculado, não permite movimentação':(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui'))+'" role="button" aria-label="Arrastar OS" draggable="'+((['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r)))?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
    '<div class="meta"><span title="'+esc(r.client)+'">'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+ 
    (r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini" title="Status automático informativo"><b>AUTOMÁTICO</b><br>'+esc(r.autoStatus)+(r.autoDetail&&r.autoDetail!=='—'?'<small class="auto-detail-mini">'+esc(r.autoDetail)+'</small>':'')+'</div>':'')+
    (r.pending?'<span class="pending-badge" title="'+esc(r.previousStatus+' → '+r.status)+'">⏳ Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
-   (r.urgent?badge(r.situation,'bad'):'')+'</div>'
+   (r.urgent?'<span class="why-label"'+whyTitle(situationReason(r))+'>'+badge(r.situation,'bad')+'</span>':'')+'</div>'
   }).join('');
   var extra=items.length>limit?'<button class="btn small" onclick="showMoreLane('+JSON.stringify(s).replace(/"/g,'&quot;')+')">Mostrar mais ('+(items.length-limit)+')</button>':'';
   return '<section class="lane" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropOn(event,'+JSON.stringify(s).replace(/"/g,'&quot;')+')">'+
-   '<div class="lane-head"><span>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
+   '<div class="lane-head"><span class="why-lane"'+whyTitle(laneReason(s))+'>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
    (cards||'<div class="empty">Sem cartões</div>')+extra+'</section>'
  }).join('');
  var button='<button class="btn small kanban-pending-toggle '+(kanbanPendingOnly?'active':'')+'" aria-pressed="'+(kanbanPendingOnly?'true':'false')+'" onclick="toggleKanbanPending()">'+(kanbanPendingOnly?'☑':'☐')+' Somente pendentes</button>';
