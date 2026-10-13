@@ -1185,9 +1185,9 @@ function toggleApprovalAll(yes){
 }
 window.toggleApprovalAll=toggleApprovalAll;
 function batchDecision(approve){return runApprovalBatch(Array.from(selectedApprovalIds),approve)}window.batchDecision=batchDecision;
-function render(){if(!profile)return;var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(Array.isArray(f.values)?f.values.length+' selecionado(s)':f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
+function render(){if(!profile)return;var noLimbo=view!=='limbo';$('metrics').classList.toggle('hidden',!noLimbo);$('filterPanel').classList.toggle('hidden',!noLimbo);if(!noLimbo){drawLimbo();return}var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(Array.isArray(f.values)?f.values.length+' selecionado(s)':f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
 if(view==='fabric')drawTable(arr);else if(view==='status')drawStatus(arr);else if(view==='roles')drawRoles(arr);else if(view==='kanban')drawKanban(arr);else drawApprovals()}
-function changeView(v){if(!profile)return;if(!profile.gestor&&['fabric','status','approval'].includes(v))return;view=v;['fabric','status','roles','kanban','approval'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===v)});render()}window.changeView=changeView;
+function changeView(v){if(!profile)return;if(!profile.gestor&&['fabric','status','approval','limbo'].includes(v))return;view=v;['fabric','status','roles','kanban','approval','limbo'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===v)});render();if(v==='limbo')loadLimbo()}window.changeView=changeView;
 function sortBy(k){if(sortKey===k)sortAsc=!sortAsc;else {sortKey=k;sortAsc=true}pageIndex=1;render()}window.sortBy=sortBy;
 function advancedToggle(){$('advanced').classList.toggle('open')}window.advancedToggle=advancedToggle;
 function addColumnFilter(){var v=$('columnValue').value.trim();if(v){extraFilters.push({k:$('columnSelect').value,v:v});$('columnValue').value='';render()}}window.addColumnFilter=addColumnFilter;
@@ -1540,17 +1540,18 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;autoStatuses=new Map();autoDetails=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
+   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;limboRows=[];limboLoaded=false;limboSelected.clear();pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;autoStatuses=new Map();autoDetails=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
    $('tab-fabric').classList.toggle('hidden',!profile.gestor);
    $('tab-status').classList.toggle('hidden',!profile.gestor);
    $('tab-approval').classList.toggle('hidden',!profile.gestor);
+   $('tab-limbo').classList.toggle('hidden',!profile.gestor);
  $('historyControl').classList.toggle('hidden',!profile.gestor);$('showHistory').checked=showHistory&&profile.gestor;
    if(!hasData){
     view=profile.gestor?'fabric':'roles';
-    ['fabric','status','roles','kanban','approval'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===view)});
+    ['fabric','status','roles','kanban','approval','limbo'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===view)});
     cacheLabel('Procurando dados salvos…','loading');
     try{
      var snapshot=await readSnapshot(cacheKey);
