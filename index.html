@@ -229,6 +229,44 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .bulk-summary strong{font-size:15px}.bulk-summary span{font-size:12px}
 .bulk-summary small{font-size:11px;color:#637689;overflow-wrap:anywhere}
 .bulk-progress{font-size:12px;color:#54647c;background:#f8fafc;padding:10px;border-radius:9px;overflow-wrap:anywhere}
+
+/* Rolagem da grade: as colunas avançam juntas, sem sobrepor valores ou datas */
+.grid-table tbody td,
+.grid-table.with-selection tbody td,
+.grid-table.with-selection tbody td.select-col{
+ position:static!important;left:auto!important;right:auto!important;
+ z-index:auto!important;box-shadow:none!important
+}
+.grid-table thead th,
+.grid-table.with-selection thead th,
+.grid-table.with-selection thead th.select-col,
+.grid-table.with-selection thead th:nth-child(2),
+.grid-table.with-selection thead th:nth-child(3){
+ position:sticky!important;top:0!important;left:auto!important;right:auto!important;
+ z-index:8!important;box-shadow:none!important
+}
+.grid-table td,.grid-table th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0!important}
+.grid-table tbody td .clip-cell{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grid-table.with-selection tbody tr.selected-row td{background:#eff6e7!important}
+
+/* Kanban compacto: os avisos permanecem contidos nos cartões */
+.kanban .lane,.kanban .mini-card{min-width:0;box-sizing:border-box}
+.kanban .mini-card{overflow:hidden}
+.kanban .mini-card .pending-badge{
+ display:block;max-width:100%;width:fit-content;box-sizing:border-box;
+ white-space:normal;overflow-wrap:anywhere;word-break:normal;
+ line-height:1.35;padding:5px 7px;font-size:10px
+}
+.kanban .mini-card .tag,.kanban .mini-card .pill{max-width:100%;box-sizing:border-box}
+.kanban .mini-card .card-top{min-width:0}
+.kanban .mini-card .card-top strong{min-width:0;overflow-wrap:anywhere}
+.kanban .mini-card .meta span:first-child{
+ min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+.kanban .mini-card .card-undo{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.kanban-head .panel-actions{gap:7px}
+.kanban-pending-toggle.active{background:#e9f0df;border-color:#9cb876;color:#496e21}
+.kanban-pending-count{background:#fff4df;color:#8c641b;border-color:#edd5a0;white-space:normal}
 </style></head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -278,6 +316,7 @@ var selectedFabricRows=new Set(),bulkBusy=false,bulkStop=false;
 var catalogoTipos=[],tiposPromise=null,tiposCarregados=false;
 var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoading=null,pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var multiSelections={type:new Set(),status:new Set(),period:new Set()},multiOptions={type:[],status:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
+var kanbanPendingOnly=false;
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null,kanbanScrollFrame=0,kanbanScrollSpeed=0;
 var nowLocal=new Date();var TODAY=[nowLocal.getFullYear(),String(nowLocal.getMonth()+1).padStart(2,'0'),String(nowLocal.getDate()).padStart(2,'0')].join('-');
 var $=function(x){return document.getElementById(x)};
@@ -813,16 +852,18 @@ function drawRoles(arr){
 }
 function moreRoles(){rolesLimit+=100;drawRoles(filtered())}window.moreRoles=moreRoles;
 function drawKanban(arr){
+ var pendingCount=arr.filter(function(r){return r.pending}).length;
+ var visible=kanbanPendingOnly?arr.filter(function(r){return r.pending}):arr;
+ var previous=$('screen').querySelector('.kanban'),savedLeft=previous?previous.scrollLeft:0,savedTop=previous?previous.scrollTop:0;
  var finais=['CONCLUÍDO','FATURADO','CANCELADO'];
  var lanes=STATUS.filter(function(s){return s!=='CANCELADO'&&(!finais.includes(s)||(showHistory&&profile&&profile.gestor))}).map(function(s){
-  var items=sorting(arr.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
+  var items=sorting(visible.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
    '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+label(r.status)+'</strong>'+
    '<span class="drag-handle '+((r.status==='FATURADO'||r.status==='SEM OS'||(r.pending&&!canAdjustPending(r)))?'disabled':'')+'" title="'+(['FATURADO','SEM OS'].includes(r.status)?'Status calculado, não permite movimentação':(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui'))+'" role="button" aria-label="Arrastar OS" draggable="'+((['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r)))?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
-   '<div class="meta"><span>'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+
-    ((!['FATURADO','SEM OS'].includes(r.status))?'<select class="kanban-move" aria-label="Mover '+esc(r.os)+' para outro status" onclick="event.stopPropagation()" onchange="event.stopPropagation();moveCard('+JSON.stringify(r.id).replace(/"/g,'&quot;')+',this.value);this.selectedIndex=0"><option value="">↪ Mover para...</option>'+STATUS.filter(function(to){return !['SEM OS','FATURADO'].includes(to)&&to!==r.status&&(profile.gestor||profile.roles.includes(r.status))}).map(function(to){return '<option value="'+esc(to)+'">'+esc(to==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':to)+'</option>'}).join('')+'</select>':'')+
-   (r.pending?'<span class="pending-badge">⏳ '+esc(r.previousStatus)+' → '+esc(r.status)+' • Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
+   '<div class="meta"><span title="'+esc(r.client)+'">'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+
+   (r.pending?'<span class="pending-badge" title="'+esc(r.previousStatus+' → '+r.status)+'">⏳ Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
    (r.urgent?badge(r.situation,'bad'):'')+'</div>'
   }).join('');
   var extra=items.length>limit?'<button class="btn small" onclick="showMoreLane('+JSON.stringify(s).replace(/"/g,'&quot;')+')">Mostrar mais ('+(items.length-limit)+')</button>':'';
@@ -830,8 +871,15 @@ function drawKanban(arr){
    '<div class="lane-head"><span>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
    (cards||'<div class="empty">Sem cartões</div>')+extra+'</section>'
  }).join('');
- $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>D. Gestão visual em cartões</h2><p>Arraste até a borda para rolar ou utilize "Mover para..." no cartão.</p></div><span class="tag">'+arr.length+' cartões</span></div><div class="kanban" ondragover="kanbanDragOver(event)" ondragleave="if(!event.currentTarget.contains(event.relatedTarget))stopKanbanScroll()">'+lanes+'</div></section>'
+ var button='<button class="btn small kanban-pending-toggle '+(kanbanPendingOnly?'active':'')+'" aria-pressed="'+(kanbanPendingOnly?'true':'false')+'" onclick="toggleKanbanPending()">'+(kanbanPendingOnly?'☑':'☐')+' Somente pendentes</button>';
+ $('screen').innerHTML='<section class="panel"><div class="panel-head kanban-head"><div><h2>D. Gestão visual em cartões</h2><p>Arraste o cartão pela alça ⠿ para mudar de etapa.</p></div><div class="panel-actions">'+
+  '<span class="tag kanban-pending-count">'+pendingCount+' aguardando aprovação</span>'+button+
+  '<span class="tag">'+visible.length+' cartões</span></div></div>'+
+  '<div class="kanban" ondragover="kanbanDragOver(event)" ondragleave="if(!event.currentTarget.contains(event.relatedTarget))stopKanbanScroll()">'+lanes+'</div></section>';
+ var next=$('screen').querySelector('.kanban');if(next){next.scrollLeft=savedLeft;next.scrollTop=savedTop}
 }
+function toggleKanbanPending(){kanbanPendingOnly=!kanbanPendingOnly;drawKanban(filtered())}
+window.toggleKanbanPending=toggleKanbanPending;
 function showMoreLane(status){laneLimits[status]=(laneLimits[status]||45)+45;drawKanban(filtered())}
 window.showMoreLane=showMoreLane;
 
@@ -1086,9 +1134,6 @@ async function adjustPending(r,to){
  if(!r||!canAdjustPending(r))return;
  var pend=r.pendingInfo,orig=r.previousStatus,cancel=to===orig,old=r.status;
  if(to===old)return;
- var pergunta=cancel?'Desfazer a movimentação da OS '+(r.os||r.quote)+' e devolver para '+orig+'?':
-   'Mudar a movimentação pendente da OS '+(r.os||r.quote)+' de '+old+' para '+to+'?';
- if(!confirm(pergunta))return;
  try{
   var response=await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(pend.id)+'/redirecionar',{
    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status_novo:to})
@@ -1100,7 +1145,7 @@ async function adjustPending(r,to){
      Object.assign({},p,{status_novo:to}):p});
   }
   applyPendingVisuals();setupFilters();render();
-  setNotice(cancel?'Movimentação desfeita. O cartão voltou à etapa original.':'Destino alterado. Aguardando aprovação.','ok');
+  setNotice('');
   // Atualiza também a fila do gestor sem esperar a consulta pesada de dados.
   await Promise.allSettled([loadPending(),profile.gestor?loadApprovals():Promise.resolve()]);
  }catch(err){setNotice('Não foi possível alterar a movimentação: '+err.message,'error')}
@@ -1109,11 +1154,6 @@ async function undoPending(id){
  var r=rows.find(function(x){return x.id===id});if(r&&r.pending)await adjustPending(r,r.previousStatus)
 }
 window.undoPending=undoPending;
-function moveCard(id,to){
- if(!to)return;
- return dropOn({preventDefault:function(){},currentTarget:null,dataTransfer:{getData:function(){return id}}},to)
-}
-window.moveCard=moveCard;
 async function dropOn(e,to){
  e.preventDefault();
  if(e.currentTarget&&e.currentTarget.classList)e.currentTarget.classList.remove('drop-target');
@@ -1123,7 +1163,6 @@ async function dropOn(e,to){
  if(!r||r.status===to||['FATURADO','SEM OS'].includes(r.status)||['FATURADO','SEM OS'].includes(to))return;
  if(r.pending){await adjustPending(r,to);return}
  if(!profile.gestor&&!profile.roles.includes(r.status))return;
- if(!confirm('Mover '+(r.os||r.quote)+' de '+r.status+' para '+to+'?\\n\\nAguardará aprovação do gestor.'))return;
  try{
   var result=await api('/controle_fabrica/solicitacoes',{
    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
@@ -1134,7 +1173,7 @@ async function dropOn(e,to){
   pendingRequests=pendingRequests.filter(function(p){return String(p.cod_os)!==String(osCode(r))});
   pendingRequests.push({id:result.id,cod_os:osCode(r),n_os:r.os,status_anterior:r.status,status_novo:to,usuario:profile.name,status:'PENDENTE'});
   applyPendingVisuals();setupFilters();render();
-  setNotice('Movimentação aguardando aprovação.','ok');
+  setNotice('');
   await Promise.allSettled([loadPending(),profile.gestor?loadApprovals():Promise.resolve()]);
  }catch(err){setNotice('Não foi possível movimentar: '+err.message,'error')}
 }
