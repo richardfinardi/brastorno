@@ -146,6 +146,29 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .excel-filter-foot button{padding:7px 10px;border-radius:7px;font-weight:750;font-size:11px}
 @media(max-width:620px){.excel-filter{max-width:calc(100vw - 12px)}}
 
+
+/* Datas: filtro estilo Excel (intervalo + árvore de ano/mês/dia). */
+.excel-date-tabs{display:flex;gap:7px;padding:10px 12px 6px}
+.excel-date-tab{flex:1;border:1px solid #dce4ec;background:#f7f9fb;border-radius:8px;color:#52647f;padding:8px 7px;font-size:11px;font-weight:800}
+.excel-date-tab.active{background:#e9f0df;color:#526f28;border-color:#b8ca9c}
+.excel-date-range{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;min-width:0}
+.excel-date-range label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#5b6c82;min-width:0}
+.excel-date-range input{width:100%;height:38px;border:1px solid #d9e1ea;border-radius:8px;padding:5px;font-size:12px;color:var(--ink);min-width:0}
+.excel-date-range small{grid-column:1/-1;font-size:10px;color:#718097}
+.excel-date-error{grid-column:1/-1;background:#fff0ee;color:#ae3c42;padding:7px;border-radius:7px;font-size:11px}
+.excel-date-choices{display:flex;flex-direction:column;min-height:0;flex:1}
+.excel-date-node{display:flex;align-items:center;min-height:34px;border-radius:7px;gap:2px}
+.excel-date-node:hover{background:#f1f5e9}
+.excel-date-node.depth-1{padding-left:20px}
+.excel-date-arrow{flex:none;width:25px;height:30px;border:0;background:none;color:#6c7c90;font-size:15px;font-weight:900}
+.excel-date-node label{display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;min-width:0}
+.excel-date-node input{accent-color:var(--olive);flex:none}
+.excel-date-node strong{font-size:12px;font-weight:750}
+.excel-date-node small{color:#8090a5;font-size:10px}
+.excel-date-day{padding-left:73px}
+.excel-date-choices .excel-filter-options{max-height:none;min-height:100px}
+.excel-date-choices .excel-filter-option{padding-top:5px;padding-bottom:5px}
+
 /* Apenas a alça ⠿ inicia a movimentação. Card = clique para detalhes. */
 .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px}
 .card-top strong{flex:1;min-width:0;line-height:1.45}
@@ -685,7 +708,7 @@ if(releaseFrom&&(!r.forecast||r.forecast<releaseFrom))return false;
 if(releaseTo&&(!r.forecast||r.forecast>releaseTo))return false;
 var hay=q?normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JSON.stringify(r.raw)):'';
 if(tokens.some(function(t){var exclude=t[0]==='-';var term=normalize(t.replace(/^[+-]/,'').replace(/^"|"$/g,''));return term&&(exclude?hay.includes(term):!hay.includes(term))}))return false;
-return extraFilters.every(function(f){if(f.k===exceptKey)return true;var val=String(r[f.k]==null?'':r[f.k]);if(Array.isArray(f.values))return f.values.includes(val);if(['entry','agreed','forecast','invoicedAt'].includes(f.k))val+=' '+human(r[f.k]);if(f.k==='value')val+=' '+money(r.value);return normalize(val).includes(normalize(f.v))})})}
+return extraFilters.every(function(f){if(f.k===exceptKey)return true;var val=String(r[f.k]==null?'':r[f.k]);if(f.kind==='dateRange')return !!val&&(!f.from||val>=f.from)&&(!f.to||val<=f.to);if(Array.isArray(f.values))return f.values.includes(val);if(['entry','agreed','forecast','invoicedAt'].includes(f.k))val+=' '+human(r[f.k]);if(f.k==='value')val+=' '+money(r.value);return normalize(val).includes(normalize(f.v))})})}
 function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</option>'+Array.from(new Set(values)).filter(Boolean).sort().map(function(v){return '<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
 function setupFilters(){var vis=visibleRows();['type','status','auto'].forEach(function(k){
  multiOptions[k]=Array.from(new Set(vis.map(function(r){return k==='auto'?r.autoStatus:r[k]}).concat(Array.from(multiSelections[k])))).filter(Boolean).sort(function(a,b){return a.localeCompare(b,'pt-BR')});
@@ -1004,11 +1027,15 @@ async function applyBulk(){
  }
 }
 window.applyBulk=applyBulk;
-/* Filtro de coluna tipo Excel, com seleção múltipla e pesquisa. */
+/* Filtro de coluna estilo Excel: datas por ano/mês/dia ou intervalo. */
+var EXCEL_DATE_KEYS=['entry','agreed','forecast','invoicedAt'];
+var EXCEL_MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+var excelDateMode='tree',excelDateFrom='',excelDateTo='',excelExpandedYears=new Set(),excelExpandedMonths=new Set();
+function excelIsDate(key){return EXCEL_DATE_KEYS.includes(key)}
 function excelColumnName(key){var v=FIELDS.find(function(f){return f[0]===key});return v?v[1]:key}
 function excelLabel(key,v){
  if(v===''||v===null||v===undefined)return '(Em branco)';
- if(['entry','agreed','forecast','invoicedAt'].includes(key))return human(v);
+ if(excelIsDate(key))return human(v);
  if(key==='value')return money(v);
  return String(v)
 }
@@ -1016,46 +1043,145 @@ function openExcelFilter(evt,key){
  var pop=$('excelFilterPopup'),r=evt.currentTarget.getBoundingClientRect();
  if(excelPopupOpen&&excelKey===key){closeExcelFilter();return}
  excelKey=key;excelPopupOpen=true;excelSearch='';
+ excelExpandedYears=new Set();excelExpandedMonths=new Set();
  var source=filtered(key),options=Array.from(new Set(source.map(function(row){return String(row[key]==null?'':row[key])})));
- options.sort(function(a,b){return excelLabel(key,a).localeCompare(excelLabel(key,b),'pt-BR',{numeric:true})});
+ options.sort(function(a,b){return excelIsDate(key)?a.localeCompare(b):excelLabel(key,a).localeCompare(excelLabel(key,b),'pt-BR',{numeric:true})});
  excelValues=options;
  var stored=extraFilters.find(function(f){return f.k===key});
+ excelDateMode=stored&&stored.kind==='dateRange'?'range':'tree';
+ excelDateFrom=stored&&stored.kind==='dateRange'?stored.from||'':'';
+ excelDateTo=stored&&stored.kind==='dateRange'?stored.to||'':'';
  excelSelected=stored&&Array.isArray(stored.values)?new Set(stored.values.map(String)):
-    new Set(options.filter(function(x){return !stored||normalize(x).includes(normalize(stored.v))}));
+    new Set(options.filter(function(x){return !stored||stored.kind==='dateRange'||normalize(x).includes(normalize(stored.v))}));
+ var isDate=excelIsDate(key);
  pop.classList.remove('hidden');
  pop.innerHTML='<div class="excel-filter-head"><strong>'+esc(excelColumnName(key))+'</strong><button class="btn small" onclick="closeExcelFilter()">✕</button></div>'+
-  '<input class="excel-filter-search" id="excelSearch" type="search" placeholder="Pesquisar valores..." oninput="excelSearchChange(this.value)">'+
+  (isDate?'<div class="excel-date-tabs"><button type="button" class="excel-date-tab" id="excelTabTree" onclick="excelDateChangeMode(\'tree\')">Ano / Mês / Dia</button><button type="button" class="excel-date-tab" id="excelTabRange" onclick="excelDateChangeMode(\'range\')">Entre datas</button></div>'+
+  '<div class="excel-date-range hidden" id="excelDateRange"><label>De<input id="excelDateFrom" type="date" value="'+esc(excelDateFrom)+'" onchange="excelDateFrom=this.value;excelDateValidate()"></label><label>Até<input id="excelDateTo" type="date" value="'+esc(excelDateTo)+'" onchange="excelDateTo=this.value;excelDateValidate()"></label><small>Datas inicial e final incluídas no filtro.</small><div class="excel-date-error hidden" id="excelDateError"></div></div>':'')+
+  '<div class="excel-date-choices" id="excelChoices">'+
+  '<input class="excel-filter-search" id="excelSearch" type="search" placeholder="'+(isDate?'Pesquisar ano, mês ou dia...':'Pesquisar valores...')+'" oninput="excelSearchChange(this.value)">'+
   '<label class="excel-filter-checkall"><input type="checkbox" id="excelCheckAll" onchange="excelToggleAll(this.checked)"> Selecionar tudo <span id="excelAllCount"></span></label>'+
-  '<div class="excel-filter-options" id="excelOptions"></div>'+
+  '<div class="excel-filter-options" id="excelOptions"></div></div>'+
   '<div class="excel-filter-summary" id="excelSummary"></div>'+
   '<div class="excel-filter-foot"><button class="btn" onclick="excelClear()">Limpar filtro</button><button class="btn" onclick="closeExcelFilter()">Cancelar</button><button class="btn primary" onclick="excelApply()">Aplicar</button></div>';
- var width=Math.min(338,window.innerWidth-20),left=Math.min(Math.max(10,r.left),Math.max(10,window.innerWidth-width-10));
- var height=Math.min(480,window.innerHeight-24),top=r.bottom+8;
+ var width=Math.min(isDate?370:338,window.innerWidth-20),left=Math.min(Math.max(10,r.left),Math.max(10,window.innerWidth-width-10));
+ var height=Math.min(isDate?520:480,window.innerHeight-24),top=r.bottom+8;
  if(top+height>window.innerHeight-8)top=Math.max(8,r.top-height-8);
  if(top+height>window.innerHeight-8)top=Math.max(8,window.innerHeight-height-8);
  pop.style.left=left+'px';pop.style.top=top+'px';pop.style.width=width+'px';
- renderExcelValues();
- setTimeout(function(){var input=$('excelSearch');if(input)input.focus({preventScroll:true})},0)
+ if(isDate)excelDateChangeMode(excelDateMode);else renderExcelValues();
+ setTimeout(function(){var input=$(isDate&&excelDateMode==='range'?'excelDateFrom':'excelSearch');if(input)input.focus({preventScroll:true})},0)
 }
 window.openExcelFilter=openExcelFilter;
-function excelMatches(){var q=normalize(excelSearch);return !q?excelValues:excelValues.filter(function(x){return normalize(excelLabel(excelKey,x)).includes(q)})}
+function excelMatches(){
+ var q=normalize(excelSearch);if(!q)return excelValues;
+ if(excelIsDate(excelKey))return excelValues.filter(function(x){
+  var month=Number(x.slice(5,7)),label=month>=1&&month<=12?EXCEL_MONTHS[month-1]:'';
+  return normalize([excelLabel(excelKey,x),x,label,x.slice(0,4),x.slice(5,7)].join(' ')).includes(q)
+ });
+ return excelValues.filter(function(x){return normalize(excelLabel(excelKey,x)).includes(q)})
+}
+function excelDateChangeMode(mode){
+ if(!excelIsDate(excelKey))return;
+ excelDateMode=mode==='range'?'range':'tree';
+ $('excelTabTree').classList.toggle('active',excelDateMode==='tree');
+ $('excelTabRange').classList.toggle('active',excelDateMode==='range');
+ $('excelChoices').classList.toggle('hidden',excelDateMode!=='tree');
+ $('excelDateRange').classList.toggle('hidden',excelDateMode!=='range');
+ excelDateValidate();renderExcelValues()
+}
+window.excelDateChangeMode=excelDateChangeMode;
+function excelDateValidate(){
+ var msg=excelDateFrom&&excelDateTo&&excelDateFrom>excelDateTo?'A data inicial não pode ser posterior à data final.':'';
+ var el=$('excelDateError');if(el){el.textContent=msg;el.classList.toggle('hidden',!msg)}
+ return !msg
+}
+window.excelDateValidate=excelDateValidate;
+function excelDateExpand(level,key){
+ var set=level==='year'?excelExpandedYears:excelExpandedMonths;
+ if(set.has(key))set.delete(key);else set.add(key);
+ renderExcelValues()
+}
+window.excelDateExpand=excelDateExpand;
+function excelDateToggleGroup(el,level,key){
+ var list=$('excelOptions'),scroll=list?list.scrollTop:0;
+ excelMatches().filter(function(v){return v!==''&&(level==='year'?v.slice(0,4)===key:v.slice(0,7)===key)}).forEach(function(v){
+  if(el.checked)excelSelected.add(v);else excelSelected.delete(v)
+ });
+ renderExcelValues();if(list)list.scrollTop=scroll
+}
+window.excelDateToggleGroup=excelDateToggleGroup;
+function excelDateBranch(label,level,key,values,depth,open){
+ var count=values.filter(function(v){return excelSelected.has(v)}).length;
+ var full=count===values.length,partial=count>0&&!full,checked=full?'checked':'';
+ return '<div class="excel-date-node depth-'+depth+'">'+
+  '<button class="excel-date-arrow" type="button" onclick="excelDateExpand(\''+level+'\',\''+key+'\')" aria-label="'+(open?'Recolher ':'Expandir ')+esc(label)+'">'+(open?'▾':'▸')+'</button>'+
+  '<label><input type="checkbox" '+checked+(partial?' data-partial="1"':'')+' onchange="excelDateToggleGroup(this,\''+level+'\',\''+key+'\')"><strong>'+esc(label)+'</strong><small>('+values.length+')</small></label></div>'
+}
+function renderExcelDateTree(match){
+ var grouped={},blanks=match.includes('');
+ match.forEach(function(v){
+  if(!/^\d{4}-\d\d-\d\d$/.test(v))return;
+  var year=v.slice(0,4),month=v.slice(5,7);
+  if(!grouped[year])grouped[year]={};
+  if(!grouped[year][month])grouped[year][month]=[];
+  grouped[year][month].push(v)
+ });
+ var out='';
+ Object.keys(grouped).sort().forEach(function(year){
+  var months=grouped[year],yearValues=Object.keys(months).sort().flatMap(function(m){return months[m]});
+  var yOpen=excelExpandedYears.has(year);
+  out+=excelDateBranch(year,'year',year,yearValues,0,yOpen);
+  if(!yOpen)return;
+  Object.keys(months).sort().forEach(function(month){
+   var values=months[month],key=year+'-'+month,mOpen=excelExpandedMonths.has(key);
+   out+=excelDateBranch(EXCEL_MONTHS[Number(month)-1]||month,'month',key,values,1,mOpen);
+   if(mOpen)values.forEach(function(v){
+    out+='<label class="excel-filter-option excel-date-day" title="'+esc(human(v))+'"><input type="checkbox" data-v="'+esc(v)+'" onchange="excelToggleOne(this)" '+(excelSelected.has(v)?'checked':'')+'><span>'+esc(human(v))+'</span></label>'
+   })
+  })
+ });
+ if(blanks)out+='<label class="excel-filter-option" title="Em branco"><input type="checkbox" data-v="" onchange="excelToggleOne(this)" '+(excelSelected.has('')?'checked':'')+'><span>(Em branco)</span></label>';
+ return out||'<div class="empty">Nenhuma data encontrada</div>'
+}
 function renderExcelValues(){
- var list=$('excelOptions');if(!list||!excelPopupOpen)return;
- var match=excelMatches(),subset=match.slice(0,180);
- list.innerHTML=subset.map(function(v){
-  return '<label class="excel-filter-option" title="'+esc(excelLabel(excelKey,v))+'"><input type="checkbox" data-v="'+esc(v)+'" onchange="excelToggleOne(this)" '+(excelSelected.has(v)?'checked':'')+'><span>'+esc(excelLabel(excelKey,v))+'</span></label>'
- }).join('')||(match.length?'<div class="empty">Nenhuma opção</div>':'<div class="empty">Nenhum valor encontrado</div>');
+ var list=$('excelOptions');if(!list||!excelPopupOpen||excelDateMode==='range'&&excelIsDate(excelKey))return;
+ var match=excelMatches(),scroll=list.scrollTop;
+ if(excelIsDate(excelKey))list.innerHTML=renderExcelDateTree(match);
+ else{
+  var subset=match.slice(0,180);
+  list.innerHTML=subset.map(function(v){
+   return '<label class="excel-filter-option" title="'+esc(excelLabel(excelKey,v))+'"><input type="checkbox" data-v="'+esc(v)+'" onchange="excelToggleOne(this)" '+(excelSelected.has(v)?'checked':'')+'><span>'+esc(excelLabel(excelKey,v))+'</span></label>'
+  }).join('')||'<div class="empty">Nenhum valor encontrado</div>'
+ }
+ list.scrollTop=scroll;
+ list.querySelectorAll('input[data-partial="1"]').forEach(function(el){el.indeterminate=true});
  $('excelCheckAll').checked=match.length>0&&match.every(function(x){return excelSelected.has(x)});
  $('excelCheckAll').indeterminate=match.some(function(x){return excelSelected.has(x)})&&!$('excelCheckAll').checked;
  $('excelAllCount').textContent='('+match.length+')';
- $('excelSummary').textContent=excelSelected.size+' selecionados • '+(match.length>180?'mostrando 180 de '+match.length+' (refine a pesquisa)':'')
+ $('excelSummary').textContent=excelSelected.size+' selecionados'+(!excelIsDate(excelKey)&&match.length>180?' • mostrando 180 de '+match.length+' (refine a pesquisa)':'')
 }
-function excelSearchChange(v){excelSearch=v;renderExcelValues()}window.excelSearchChange=excelSearchChange;
+function excelSearchChange(v){
+ excelSearch=v;
+ if(excelIsDate(excelKey)&&v.trim()){
+  var matches=excelMatches();
+  excelExpandedYears=new Set(matches.filter(function(x){return /^\d{4}-/.test(x)}).map(function(x){return x.slice(0,4)}));
+  excelExpandedMonths=new Set(matches.filter(function(x){return /^\d{4}-/.test(x)}).map(function(x){return x.slice(0,7)}))
+ }
+ renderExcelValues()
+}window.excelSearchChange=excelSearchChange;
 function excelToggleOne(el){var list=$('excelOptions'),y=list?list.scrollTop:0;if(el.checked)excelSelected.add(el.dataset.v);else excelSelected.delete(el.dataset.v);renderExcelValues();if(list)list.scrollTop=y}window.excelToggleOne=excelToggleOne;
 function excelToggleAll(yes){var list=$('excelOptions'),y=list?list.scrollTop:0;excelMatches().forEach(function(x){if(yes)excelSelected.add(x);else excelSelected.delete(x)});renderExcelValues();if(list)list.scrollTop=y}window.excelToggleAll=excelToggleAll;
 function excelApply(){
- extraFilters=extraFilters.filter(function(x){return x.k!==excelKey});
- if(excelSelected.size!==excelValues.length)extraFilters.push({k:excelKey,values:Array.from(excelSelected)});
+ if(excelIsDate(excelKey)&&excelDateMode==='range'){
+  if(!excelDateValidate())return;
+  if(!excelDateFrom&&!excelDateTo){$('excelDateError').textContent='Informe ao menos uma data.';$('excelDateError').classList.remove('hidden');return}
+  extraFilters=extraFilters.filter(function(x){return x.k!==excelKey});
+  extraFilters.push({k:excelKey,kind:'dateRange',from:excelDateFrom,to:excelDateTo})
+ }else{
+  extraFilters=extraFilters.filter(function(x){return x.k!==excelKey});
+  if(excelSelected.size!==excelValues.length||excelValues.some(function(v){return !excelSelected.has(v)}))extraFilters.push({k:excelKey,values:Array.from(excelSelected)})
+ }
  pageIndex=1;rolesLimit=100;closeExcelFilter();render()
 }
 window.excelApply=excelApply;
