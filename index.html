@@ -1057,7 +1057,7 @@ function openExcelFilter(evt,key){
  pop.classList.remove('hidden');
  pop.innerHTML='<div class="excel-filter-head"><strong>'+esc(excelColumnName(key))+'</strong><button class="btn small" onclick="closeExcelFilter()">✕</button></div>'+
   (isDate?'<div class="excel-date-tabs"><button type="button" class="excel-date-tab" id="excelTabTree" onclick="excelDateChangeMode(\'tree\')">Ano / Mês / Dia</button><button type="button" class="excel-date-tab" id="excelTabRange" onclick="excelDateChangeMode(\'range\')">Entre datas</button></div>'+
-  '<div class="excel-date-range hidden" id="excelDateRange"><label>De<input id="excelDateFrom" type="date" value="'+esc(excelDateFrom)+'" onchange="excelDateFrom=this.value;excelDateValidate()"></label><label>Até<input id="excelDateTo" type="date" value="'+esc(excelDateTo)+'" onchange="excelDateTo=this.value;excelDateValidate()"></label><small>Datas inicial e final incluídas no filtro.</small><div class="excel-date-error hidden" id="excelDateError"></div></div>':'')+
+  '<div class="excel-date-range hidden" id="excelDateRange"><label>De<input id="excelDateFrom" type="date" value="'+esc(excelDateFrom)+'" onchange="excelSetDateBound(this.id,this.value)"></label><label>Até<input id="excelDateTo" type="date" value="'+esc(excelDateTo)+'" onchange="excelSetDateBound(this.id,this.value)"></label><small>Datas inicial e final incluídas no filtro.</small><div class="excel-date-error hidden" id="excelDateError"></div></div>':'')+
   '<div class="excel-date-choices" id="excelChoices">'+
   '<input class="excel-filter-search" id="excelSearch" type="search" placeholder="'+(isDate?'Pesquisar ano, mês ou dia...':'Pesquisar valores...')+'" oninput="excelSearchChange(this.value)">'+
   '<label class="excel-filter-checkall"><input type="checkbox" id="excelCheckAll" onchange="excelToggleAll(this.checked)"> Selecionar tudo <span id="excelAllCount"></span></label>'+
@@ -1091,6 +1091,8 @@ function excelDateChangeMode(mode){
  excelDateValidate();renderExcelValues()
 }
 window.excelDateChangeMode=excelDateChangeMode;
+function excelSetDateBound(id,value){if(id==='excelDateFrom')excelDateFrom=value;else excelDateTo=value;excelDateValidate()}
+window.excelSetDateBound=excelSetDateBound;
 function excelDateValidate(){
  var msg=excelDateFrom&&excelDateTo&&excelDateFrom>excelDateTo?'A data inicial não pode ser posterior à data final.':'';
  var el=$('excelDateError');if(el){el.textContent=msg;el.classList.toggle('hidden',!msg)}
