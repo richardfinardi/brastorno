@@ -397,6 +397,7 @@ var selectedApprovalIds=new Set(),approvalBusy=false;
 var selectedFabricRows=new Set(),bulkBusy=false,bulkStop=false;
 var limboRows=[],limboSelected=new Set(),limboLoaded=false,limboBusy=false,notePendingId=null;
 var catalogoTipos=[],tiposPromise=null,tiposCarregados=false;
+var statusOrcamentos=[],statusOrcPromise=null,statusOrcCarregados=false;
 var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoading=null,pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var multiSelections={type:new Set(),status:new Set(),auto:new Set(),period:new Set()},multiOptions={type:[],status:[],auto:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
 var kanbanPendingOnly=false;
@@ -531,10 +532,11 @@ async function removeSnapshot(key){
 }
 
 function applyPendingVisuals(){
- var byOS=new Map(),byNumber=new Map();
+ var byOS=new Map(),byNumber=new Map(),byOrc=new Map();
  pendingRequests.forEach(function(p){
   if(p.cod_os!==undefined&&p.cod_os!==null)byOS.set(String(p.cod_os),p);
-  if(p.n_os)byNumber.set(String(p.n_os).trim(),p)
+  if(p.n_os)byNumber.set(String(p.n_os).trim(),p);
+  if(p.guid_linha&&p.cod_empresa)byOrc.set('ORC:'+p.cod_empresa+':'+String(p.guid_linha).toUpperCase(),p)
  });
  var conjunto=baseRows.concat(showHistory&&profile&&profile.gestor?historyRows:[]);
   var ids=new Set();
@@ -546,7 +548,7 @@ function applyPendingVisuals(){
   var keyNumero=r.os?'NUM:'+normalize(r.os):'';
   r.autoStatus=autoStatuses.get(registro)||autoStatuses.get(keyEmpresa)||autoStatuses.get(keyCodigo)||autoStatuses.get(keyNumero)||'—';
   r.autoDetail=autoDetails.get(registro)||autoDetails.get(keyEmpresa)||autoDetails.get(keyCodigo)||autoDetails.get(keyNumero)||'—';
-  var id=osCode(r),p=(id!==null?byOS.get(String(id)):null)||(r.os?byNumber.get(String(r.os).trim()):null);
+  var id=osCode(r),p=(id!==null?byOS.get(String(id)):null)||(r.os?byNumber.get(String(r.os).trim()):null)||byOrc.get(registro);
   if(!p||!p.status_novo)return r;
   if(normalize(r.status)!==normalize(p.status_anterior))return r;
   r.previousStatus=r.status;r.status=String(p.status_novo).toUpperCase();
@@ -632,6 +634,15 @@ baseRows=raw.map(normalizeItem).filter(function(r){
 function parseProfile(p){var src=(p&&p.permissoes)||p&&p.permissions||p||{};var gestor=truthy(read(src,['U_GESTOR','gestor']));var roles=STATUS.filter(function(s){return PERMS[s]&&truthy(read(src,[PERMS[s]]))});return {gestor:gestor,roles:roles,name:read(p,['usuario','nome','username'])||localStorage.getItem('brastorno_usuario_nome')||'USUÁRIO'}}
 function flattenResult(v){if(Array.isArray(v))return v;if(!v||typeof v!=='object')return [];for(var i=0;i<['dados','data','resultado','resultados','itens','items','rows','registros','records'].length;i++){var x=read(v,[['dados','data','resultado','resultados','itens','items','rows','registros','records'][i]]);if(Array.isArray(x))return x;if(x&&typeof x==='object'){var y=flattenResult(x);if(y.length)return y}}return []}
 function statusOf(raw){
+ // Item sem OS tem etapa própria em TORCAMENTO_ITENS.STRING1.
+ // Não confundir CONCLUÍDO do item com OS concluída aguardando faturamento.
+ var ehItemOrc=truthy(read(raw,['sem_os']))||/^ORC:/i.test(String(read(raw,['registro_id'])||''));
+ if(ehItemOrc){
+  var st=normalize(read(raw,['status','status_calculado','status_item']));
+  if(truthy(read(raw,['faturado_total']))||st==='FATURADO')return 'FATURADO';
+  var valido=STATUS.find(function(x){return normalize(x)===st});
+  return valido||'SEM OS'
+ }
  // Prioridade: faturado integral > concluído com orçamento > concluído sem orçamento > CPS.
  var situacao=normalize(read(raw,['situacao','situacao_prazo']));
  var origem=normalize(read(raw,['status','status_calculado']));
@@ -1220,8 +1231,7 @@ function drawKanban(arr){
  var pendingCount=arr.filter(function(r){return r.pending}).length;
  var visible=kanbanPendingOnly?arr.filter(function(r){return r.pending}):arr;
  var previous=$('screen').querySelector('.kanban'),savedLeft=previous?previous.scrollLeft:0,savedTop=previous?previous.scrollTop:0;
- var finais=['CONCLUÍDO','FATURADO','CANCELADO'];
- var lanes=STATUS.filter(function(s){return s!=='CANCELADO'&&(!finais.includes(s)||(showHistory&&profile&&profile.gestor))}).map(function(s){
+ var lanes=STATUS.filter(function(s){return !['CANCELADO','CONCLUÍDO','FATURADO'].includes(s)||(showHistory&&profile&&profile.gestor)}).map(function(s){
   var items=sorting(visible.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
@@ -1435,6 +1445,38 @@ async function carregarTipos(){
    }finally{tiposPromise=null}
  })();
  return tiposPromise
+}
+
+async function carregarStatusOrcamento(){
+ if(statusOrcPromise)return statusOrcPromise;
+ statusOrcPromise=(async function(){
+  try{
+   var r=await api('/controle_fabrica/status_orcamento');
+   var validos=new Set(STATUS.filter(function(s){return !['SEM OS','FATURADO'].includes(s)}).map(normalize));
+   statusOrcamentos=(Array.isArray(r&&r.status)?r.status:[]).filter(function(x){
+    return x&&x.nome&&validos.has(normalize(x.nome))
+   });
+   statusOrcCarregados=true;
+   if(selected&&$('editStatusOrc'))atualizarSelectStatusOrc();
+   return statusOrcamentos
+  }catch(e){
+   console.warn('Falha ao carregar status de TST_SERV:',e);
+   statusOrcCarregados=false;
+   return []
+  }finally{statusOrcPromise=null}
+ })();
+ return statusOrcPromise
+}
+function statusOrcHtml(){
+ return '<option value="">Não alterar o status</option>'+
+  statusOrcamentos.map(function(x){return '<option value="'+esc(x.nome)+'">'+esc(x.nome)+'</option>'}).join('')
+}
+function atualizarSelectStatusOrc(){
+ var el=$('editStatusOrc');if(!el)return;
+ var antigo=el.value;
+ el.innerHTML=statusOrcHtml();
+ if(antigo&&Array.from(el.options).some(function(o){return o.value===antigo}))el.value=antigo;
+ el.disabled=!statusOrcCarregados;
 }
 function montarOpcoesTipo(r){
  var options=catalogoTipos.filter(function(t){return t.codigo_orcamento!==null&&t.codigo_orcamento!==undefined});
@@ -1684,7 +1726,7 @@ async function toggleHistory(checked){
  historyLoading=(async function(){
   try{
    var response=await api('/controle_fabrica/historico?_t='+Date.now());
-   historyRows=flattenResult(response).map(normalizeItem).filter(function(r){return ['CONCLUÍDO','FATURADO'].includes(r.status)});
+   historyRows=flattenResult(response).map(normalizeItem).filter(function(r){return ['CONCLUÍDO','FATURADO','CANCELADO'].includes(r.status)});
    historyLoaded=true;applyPendingVisuals();setupFilters();pageIndex=1;render();setNotice('')
   }catch(e){
    showHistory=false;$('showHistory').checked=false;
@@ -1744,7 +1786,7 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;limboRows=[];limboLoaded=false;limboSelected.clear();pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;autoStatuses=new Map();autoDetails=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
+   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;limboRows=[];limboLoaded=false;limboSelected.clear();pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;statusOrcamentos=[];statusOrcCarregados=false;autoStatuses=new Map();autoDetails=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
@@ -1769,7 +1811,7 @@ async function loadAll(){
    loadData({silent:true});
    loadAutoStatuses();
    loadPending();
-   if(profile.gestor){carregarTipos();loadApprovals();}
+   if(profile.gestor){carregarTipos();carregarStatusOrcamento();loadApprovals();}
   }catch(err){
    // Não exibe qualquer dado local se as permissões não forem validadas.
    profile=null;hasData=false;rows=[];cacheKey='';
