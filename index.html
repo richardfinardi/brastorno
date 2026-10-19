@@ -1513,16 +1513,16 @@ function openModal(id,focusField){
  var entries=obsEntries(r.obs);var logs='<section class="edit-section obs-section"><div class="obs-title-row"><h3>Histórico de observações</h3><span class="obs-counter">'+entries.length+' registro(s)</span></div>'+obsHistoryHtml(r.obs)+'</section>';
  var edit='';
  if(canEdit){
-   edit='<div class="edit-section"><h3>Alterar serviço</h3>'+
+   edit='<div class="edit-section"><h3>'+esc(isOS?'Alterar serviço':'Alterar orçamento')+'</h3>'+
    '<div class="cols">'+
    '<div class="field"><label for="editType">Tipo / Classificação</label><select id="editType" '+(!tiposCarregados?'disabled':'')+'>'+montarOpcoesTipo(r)+'</select><small class="field-help">Atual: '+esc(r.type||'—')+' • '+'Cadastro de itens • Empresa 1'+'</small></div>'+
-   (isOS?'<div class="field"><label for="editForecast">Previsão de liberação</label><input id="editForecast" type="date" value="'+esc(r.forecast||'')+'"></div>':'')+'</div>'+
-   (isOS?'<div class="field" style="margin-top:12px"><label for="editObservation">Nova observação</label><textarea id="editObservation" maxlength="10000" placeholder="Adicionar ao histórico sem apagar as observações anteriores"></textarea></div>':'')+
+   (isOS?'<div class="field"><label for="editForecast">Previsão de liberação</label><input id="editForecast" type="date" value="'+esc(r.forecast||'')+'"></div>':'<div class="field"><label for="editStatusOrc">Status do item (TST_SERV)</label><select id="editStatusOrc" '+(!statusOrcCarregados?'disabled':'')+'>'+statusOrcHtml()+'</select><small class="field-help">Atual: '+esc(r.status)+' • Gravado em TORCAMENTO_ITENS.STRING1</small></div>')+'</div>'+
+   '<div class="field" style="margin-top:12px"><label for="editObservation">Nova observação</label><textarea id="editObservation" maxlength="10000" placeholder="Adicionar ao histórico sem apagar as observações anteriores"></textarea></div>'+
    '<small style="display:block;margin-top:8px;color:#738198">Cada alteração é registrada com usuário, data e hora.</small>'+ 
    '<div class="edit-save-actions"><button type="button" id="btnSaveModal" class="btn primary" onclick="saveModal()">Salvar alterações</button></div>'+
    '</div>';
  }
- if(!canEdit&&isOS&&profile&&profile.roles.includes(r.status)){
+ if(!canEdit&&(isOS||guidOrc)&&profile&&(profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus)))){
   edit='<div class="edit-section"><h3>Adicionar observação</h3><div class="field"><label for="editObservation">Nova observação</label><textarea id="editObservation" maxlength="10000" placeholder="Registro com usuário e data no histórico da OS."></textarea></div><div class="edit-save-actions"><button id="btnSaveModal" type="button" class="btn primary" onclick="saveModal()">Registrar observação</button></div></div>';
  }
  var compact='<div class="obs-service-ref"><strong>'+esc(r.product||r.os||'Servico')+'</strong><span>'+esc(r.client||'')+'</span></div>';
@@ -1530,6 +1530,7 @@ function openModal(id,focusField){
  compact+edit+logs+'<section class="edit-section obs-service-data"><h3>Dados do servico</h3>'+values+'</section>';
  $('overlay').classList.add('show');
  if(canEdit&&!tiposCarregados)carregarTipos();
+ if(canEdit&&!isOS&&!statusOrcCarregados)carregarStatusOrcamento();
  if(focusField&&canEdit){var target=$(focusField==='type'?'editType':'editForecast');if(target)target.focus()}
  }window.openModal=openModal;
 function rawPatch(raw,aliases,value){
@@ -1550,6 +1551,14 @@ function patchLocalOS(cod,patch){
  render();
  if(cacheKey)saveSnapshot(cacheKey,baseRows.map(function(item){return item.raw}),Date.now()).catch(function(){})
 }
+function patchLocalOrcData(guid,aliases,value){
+ baseRows=baseRows.map(function(item,i){
+  if(orcamentoGuid(item)!==guid)return item;
+  return normalizeItem(rawPatch(item.raw,aliases,value),i)
+ });
+ applyPendingVisuals();setupFilters();render();
+ if(cacheKey)saveSnapshot(cacheKey,baseRows.map(function(item){return item.raw}),Date.now()).catch(function(){})
+}
 function patchLocalOrc(guid,desc){
  baseRows=baseRows.map(function(item,i){
    if(orcamentoGuid(item)!==guid)return item;
@@ -1561,13 +1570,14 @@ function patchLocalOrc(guid,desc){
 }
 async function saveModal(){
  var r=selected,code=osCode(r),guid=orcamentoGuid(r),isOS=!!code;
- if(!r||!profile||(!code&&!guid)||(!profile.gestor&&!code))return;
+ if(!r||!profile||(!code&&!guid)||(!profile.gestor&&!profile.roles.includes(r.status)&&!(r.pending&&profile.roles.includes(r.previousStatus))))return;
  var choice=profile.gestor&&$('editType')?$('editType').value:'',
      item=choice?catalogoTipos.find(function(t){return 'orcamento:'+t.codigo_orcamento===choice}):null;
  if(choice&&!item){alert('Tipo inválido. Aguarde a atualização do cadastro.');return}
  var typeNew=item?item.descricao:null,
      newDate=profile.gestor&&isOS&&$('editForecast')?$('editForecast').value||null:null,
-     note=isOS&&$('editObservation')?obsPlain($('editObservation').value):'';
+     newStatus=profile.gestor&&!isOS&&$('editStatusOrc')?$('editStatusOrc').value:'',
+     note=$('editObservation')?obsPlain($('editObservation').value):'';
  var changes=[];
  if(item)changes.push(['tipo',{
    cod_classificacao:item.codigo_orcamento,
@@ -1575,18 +1585,20 @@ async function saveModal(){
    classificacao:typeNew
  },'PATCH','type']);
  if(isOS&&profile.gestor&&(newDate||'')!==(r.forecast||''))changes.push(['previsao',{u_prev_lib:newDate},'PATCH','forecast']);
+ if(!isOS&&newStatus&&normalize(newStatus)!==normalize(r.status))changes.push(['status',{status_novo:newStatus},'PATCH','status']);
  if(note)changes.push(['observacoes',{texto:note},'POST','note']);
  if(!changes.length){closeModal();return}
  var btn=$('btnSaveModal');btn.disabled=true;btn.textContent='Salvando…';
  try{
   for(var i=0;i<changes.length;i++){
-   var c=changes[i],path=c[0]==='tipo'&&!isOS?
-     '/controle_fabrica/orcamento_item/'+encodeURIComponent(guid)+'/tipo':
-     '/controle_fabrica/os/'+code+'/'+c[0];
+   var c=changes[i],path=isOS?'/controle_fabrica/os/'+code+'/'+c[0]:
+     '/controle_fabrica/orcamento_item/'+encodeURIComponent(guid)+'/'+c[0];
    var response=await api(path,{method:c[2],
       headers:{'Content-Type':'application/json'},body:JSON.stringify(c[1])});
    if(!isOS){
      if(c[3]==='type')patchLocalOrc(guid,response.classificacao||typeNew);
+     if(c[3]==='status')patchLocalOrcData(guid,['status','status_item'],response.status_novo||newStatus);
+     if(c[3]==='note'&&typeof response.obs==='string')patchLocalOrcData(guid,['observacoes','obs'],response.obs);
    }else{
      var patch={};
      if(c[3]==='type')patch.type=response.classificacao||typeNew;
