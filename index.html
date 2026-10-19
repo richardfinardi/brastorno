@@ -1236,7 +1236,7 @@ function drawKanban(arr){
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
    '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+plainLabel(r.status)+'</strong>'+
-   '<span class="drag-handle '+((r.status==='FATURADO'||r.status==='SEM OS'||(r.pending&&!canAdjustPending(r)))?'disabled':'')+'" title="'+(['FATURADO','SEM OS'].includes(r.status)?'Status calculado, não permite movimentação':(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui'))+'" role="button" aria-label="Arrastar OS" draggable="'+((['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r)))?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
+   '<span class="drag-handle '+((r.status==='FATURADO'||(r.pending&&!canAdjustPending(r)))?'disabled':'')+'" title="'+(r.status==='FATURADO'?'Status calculado, não permite movimentação':(r.pending?'Arraste para mudar o destino ou retornar à origem':'Arraste por aqui'))+'" role="button" aria-label="Arrastar OS" draggable="'+((r.status==='FATURADO'||(r.pending&&!canAdjustPending(r)))?'false':'true')+'" onclick="event.stopPropagation()" ondragstart="dragStart(event,'+JSON.stringify(r.id).replace(/"/g,'&quot;')+')" ondragend="dragEnd()" >⠿</span></div><span class="prod">'+esc(r.product)+'</span>'+
    '<div class="meta"><span title="'+esc(r.client)+'">'+esc(r.client)+'</span><span class="'+(r.urgent?'bad':'')+'">'+human(r.forecast)+'</span></div>'+ 
    (r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini" title="Status automático informativo"><b>AUTOMÁTICO</b><br>'+esc(r.autoStatus)+'</div>':'')+
    (r.pending?'<span class="pending-badge" title="'+esc(r.previousStatus+' → '+r.status)+'">⏳ Aguardando aprovação</span>'+(canAdjustPending(r)?'<button class="btn small" type="button" onclick="event.stopPropagation();openPendingNote('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">✎ Justificar movimentação</button><button class="card-undo" type="button" onclick="event.stopPropagation();undoPending('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">↶ Desfazer movimentação</button>':''):'')+
@@ -1330,7 +1330,7 @@ function openPendingNote(rowId){
  var r=rows.find(function(x){return x.id===rowId});
  if(!r||!r.pending||!canAdjustPending(r)||!r.pendingInfo||!r.pendingInfo.id)return;
  notePendingId=String(r.pendingInfo.id);
- $('pendingNoteContext').textContent='OS '+(r.os||'')+' • '+r.previousStatus+' → '+r.status;
+ $('pendingNoteContext').textContent=(r.os?'OS '+r.os:'Orçamento '+r.quote)+' • '+r.previousStatus+' → '+r.status;
  $('pendingNoteText').value='';$('noteOverlay').classList.remove('hidden');$('pendingNoteText').focus()
 }
 window.openPendingNote=openPendingNote;
@@ -1345,7 +1345,7 @@ async function savePendingNote(){
   await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(id)+'/observacao',{
    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:texto})
   });
-  closePendingNote();setNotice('Justificativa registrada no histórico da OS.','ok');
+  closePendingNote();setNotice('Justificativa registrada no histórico do registro.','ok');
   await Promise.allSettled([loadData({force:true}),loadPending()]);
  }catch(e){setNotice('Não foi possível registrar a justificativa: '+e.message,'error')}
  finally{btn.disabled=false;btn.textContent='Gravar no histórico'}
@@ -1353,10 +1353,11 @@ async function savePendingNote(){
 window.savePendingNote=savePendingNote;
 function approvalDetails(req,byCod,byOS){
  var code=String(req.cod_os==null?'':req.cod_os),number=String(req.n_os||req.os||'').trim();
+ if(req.guid_linha&&byCod.byGuid)return byCod.byGuid.get(String(req.cod_empresa||'1')+':'+String(req.guid_linha).toUpperCase())||null;
  return byCod.get(code)||byOS.get(number)||null
 }
 function approvalCard(req,row){
- var id=String(req.id||req.codigo||''),os=req.n_os||req.os||row&&row.os||'OS',
+ var id=String(req.id||req.codigo||''),isQuote=!!req.guid_linha,os=isQuote?(row&&row.quote||'ORC '+req.cod_orcamento):(req.n_os||req.os||row&&row.os||'OS'),
  origin=req.status_anterior||req.origem||'—',dest=req.status_novo||req.destino||'—',
  author=req.usuario||req.solicitante||'—',at=req.criado_em||req.data||'',
  desc=row?row.product:String(req.titulo||req.descricao||'Descrição indisponível'),
@@ -1364,7 +1365,7 @@ function approvalCard(req,row){
  type=row?row.type:null,deadline=row?human(row.forecast):null;
  var checked=selectedApprovalIds.has(id)?' checked':'',dlink=row?'<button class="btn small" onclick="openModal('+JSON.stringify(row.id).replace(/"/g,'&quot;')+')">Detalhes</button>':'';
  return '<article class="approval-card"><div class="approval-top">'+
-  '<label class="approval-select"><input type="checkbox" data-id="'+esc(id)+'" onchange="toggleApprovalPick(this)"'+checked+'><strong>OS '+esc(os)+'</strong></label>'+
+  '<label class="approval-select"><input type="checkbox" data-id="'+esc(id)+'" onchange="toggleApprovalPick(this)"'+checked+'><strong>'+esc(isQuote?'Orçamento '+os:'OS '+os)+'</strong></label>'+
   '<span class="pending-badge">'+esc(origin)+' → '+esc(dest)+'</span></div>'+
   '<div class="approval-content"><h3 title="'+esc(desc)+'">'+esc(desc)+'</h3><div class="approval-client" title="'+esc(client)+'">'+esc(client)+'</div>'+
   '<div class="approval-meta">'+(type&&type!=='—'?'<span>Tipo: '+esc(type)+'</span>':'')+
@@ -1377,8 +1378,8 @@ function approvalCard(req,row){
 }
 function drawApprovals(){
  if(!profile||!profile.gestor)return;
- var byCod=new Map(),byOS=new Map();
- baseRows.forEach(function(row){var code=osCode(row);if(code!==null&&!byCod.has(String(code)))byCod.set(String(code),row);if(row.os&&!byOS.has(String(row.os).trim()))byOS.set(String(row.os).trim(),row)});
+ var byCod=new Map(),byOS=new Map();byCod.byGuid=new Map();
+ baseRows.forEach(function(row){var code=osCode(row);if(code!==null&&!byCod.has(String(code)))byCod.set(String(code),row);if(row.os&&!byOS.has(String(row.os).trim()))byOS.set(String(row.os).trim(),row);var reg=String(read(row.raw,['registro_id'])||'').match(/^ORC:(\d+):(.+)$/i);if(reg)byCod.byGuid.set(reg[1]+':'+reg[2].toUpperCase(),row)});
  var valid=new Set(pending.map(function(x){return String(x.id||x.codigo||'')}));selectedApprovalIds.forEach(function(id){if(!valid.has(id))selectedApprovalIds.delete(id)});
  var all=pending.length>0&&selectedApprovalIds.size===pending.length;
  var cards=pending.map(function(p){return approvalCard(p,approvalDetails(p,byCod,byOS))}).join('');
@@ -1604,7 +1605,7 @@ function closeModal(){$('overlay').classList.remove('show');selected=null}window
 function canAdjustPending(r){return !!(r&&r.pending&&r.pendingInfo&&r.pendingInfo.id&&profile&&(profile.gestor||normalize(r.pendingInfo.usuario)===normalize(profile.name)))}
 function dragStart(e,id){
  var r=rows.find(function(x){return x.id===id});
- if(!r||['FATURADO','SEM OS'].includes(r.status)||(r.pending&&!canAdjustPending(r))){e.preventDefault();return}
+ if(!r||r.status==='FATURADO'||(r.pending&&!canAdjustPending(r))){e.preventDefault();return}
  dragging=id;e.stopPropagation();e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';
  var card=e.currentTarget.closest('.mini-card');if(card)card.classList.add('dragging')
 }window.dragStart=dragStart;
@@ -1662,18 +1663,23 @@ async function dropOn(e,to){
  var id=(e.dataTransfer&&e.dataTransfer.getData('text/plain'))||dragging;
  dragEnd();
  var r=rows.find(function(x){return x.id===id});
- if(!r||r.status===to||['FATURADO','SEM OS'].includes(r.status)||['FATURADO','SEM OS'].includes(to))return;
+ if(!r||r.status===to||r.status==='FATURADO')return;
  if(r.pending){await adjustPending(r,to);return}
+ if(['FATURADO','SEM OS'].includes(to))return;
  if(!profile.gestor&&!profile.roles.includes(r.status))return;
  try{
   var result=await api('/controle_fabrica/solicitacoes',{
    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    cod_os:osCode(r),n_os:r.os,guid_linha:read(r.raw,['guid_linha']),
+    cod_os:osCode(r),n_os:r.os,guid_linha:orcamentoGuid(r)||null,
     status_anterior:r.status,status_novo:to,origem:'KANBAN'
    })
   });
-  pendingRequests=pendingRequests.filter(function(p){return String(p.cod_os)!==String(osCode(r))});
-  pendingRequests.push({id:result.id,cod_os:osCode(r),n_os:r.os,status_anterior:r.status,status_novo:to,usuario:profile.name,status:'PENDENTE'});
+  var g=orcamentoGuid(r),reg=String(read(r.raw,['registro_id'])||''),emp=(reg.match(/^ORC:(\d+):/i)||[])[1]||'1';
+  pendingRequests=pendingRequests.filter(function(p){return g?
+   String(p.guid_linha||'').toUpperCase()!==g.toUpperCase() : String(p.cod_os)!==String(osCode(r))});
+  pendingRequests.push({id:result.id,cod_os:osCode(r),n_os:r.os,
+   guid_linha:g||null,cod_empresa:g?Number(emp):null,
+   status_anterior:r.status,status_novo:to,usuario:profile.name,status:'PENDENTE'});
   applyPendingVisuals();setupFilters();render();
   setNotice('');
   await Promise.allSettled([loadPending(),profile.gestor?loadApprovals():Promise.resolve()]);
