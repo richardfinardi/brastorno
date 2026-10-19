@@ -941,13 +941,24 @@ async function openBulk(){
   '<div class="field"><label for="bulkType">Novo tipo / classificação</label><select id="bulkType" disabled><option value="">Carregando...</option></select><small id="bulkTypeHint">Consultando cadastro...</small></div>'+
   '<div class="field"><label for="bulkStatus">Novo status</label><select id="bulkStatus"><option value="">Não alterar o status</option>'+
    ['ENGENHARIA','PCP','COMPRAS','PRODUÇÃO','QUALIDADE','FATURAMENTO','EXPEDIÇÃO','CONCLUÍDO','PARALISADO','CANCELADO'].map(function(x){return '<option value="'+esc(x)+'">'+esc(x)+'</option>'}).join('')+
-  '</select><small>As mudanças de status ficarão aguardando aprovação do gestor. Itens sem OS não recebem status.</small></div>'+
+  '</select><small id="bulkStatusHint">As mudanças de status ficarão aguardando aprovação do gestor, inclusive os itens sem OS.</small></div>'+
   '<div id="bulkProgress" class="bulk-progress">Escolha o tipo e/ou status e clique em Aplicar alterações.</div>';
  $('bulkApplyBtn').disabled=false;
  $('bulkApplyBtn').textContent='Aplicar alterações';
  $('bulkCloseBtn').textContent='Cancelar';
  if(!tiposCarregados)await carregarTipos();
- if(!overlay.classList.contains('hidden'))renderBulkTypes()
+ if(chosen.quotes.length&&!statusOrcCarregados)await carregarStatusOrcamento();
+ if(!overlay.classList.contains('hidden')){
+  renderBulkTypes();
+  if(chosen.quotes.length){
+   var el=$('bulkStatus'),valid=new Set(statusOrcamentos.map(function(x){return normalize(x.nome)}));
+   Array.from(el.options).forEach(function(opt){if(opt.value&&!valid.has(normalize(opt.value)))opt.remove()});
+   el.disabled=!statusOrcCarregados;
+   $('bulkStatusHint').textContent=statusOrcCarregados?
+    'Status dos itens sem OS: somente TST_SERV da empresa 1. Movimentações aguardam aprovação.':
+    'Não foi possível carregar TST_SERV. Apenas alterações de tipo disponíveis.'
+  }
+ }
 }
 window.openBulk=openBulk;
 async function applyBulk(){
@@ -958,7 +969,7 @@ async function applyBulk(){
  var tipo=choice?catalogoTipos.find(function(t){return normalize(t.descricao)===choice}):null;
  if(choice&&!tipo){alert('Selecione uma classificação válida no CPS.');return}
  var operacoesTipo=tipo?chosen.all.filter(function(r){return osCode(r)!==null||orcamentoGuid(r)}):[];
- var operacoesStatus=status?chosen.os.filter(function(r){return !r.pending&&normalize(r.status)!==normalize(status)}):[];
+ var operacoesStatus=status?chosen.all.filter(function(r){return (osCode(r)!==null||orcamentoGuid(r))&&!r.pending&&normalize(r.status)!==normalize(status)}):[];
  if(!operacoesTipo.length&&!operacoesStatus.length){alert('Não há alterações aplicáveis nos itens selecionados.');return}
  if(!confirm('Confirmar alteração em lote?\n\n'+chosen.all.length+' selecionado(s)'+
   (tipo?'\nTipo: '+tipo.descricao+' ('+operacoesTipo.length+' elegíveis)':'')+
@@ -983,13 +994,17 @@ async function applyBulk(){
     }catch(e){success=false;fail.push((r.os||r.quote||key)+' • tipo: '+e.message)}
    }else if(tipo)skipped++;
    if(status){
-    if(code!==null&&!r.pending&&normalize(r.status)!==normalize(status)&&!processedOS.has(String(code))){
-     processedOS.add(String(code));
+    var chaveStatus=code!==null?'OS:'+code:'ORC:'+guid;
+    if((code!==null||guid)&&!r.pending&&normalize(r.status)!==normalize(status)&&!processedOS.has(chaveStatus)){
+     processedOS.add(chaveStatus);
      try{
       var res=await api('/controle_fabrica/solicitacoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-       cod_os:code,n_os:r.os,status_anterior:r.status,status_novo:status,origem:'GESTAO_FABRICA_LOTE'
+       cod_os:code,n_os:r.os,guid_linha:guid||null,status_anterior:r.status,status_novo:status,origem:'GESTAO_FABRICA_LOTE'
       })});
-      created.push({id:res.id,cod_os:code,n_os:r.os,status_anterior:r.status,status_novo:status,usuario:profile.name,status:'PENDENTE'});
+      var reg=String(read(r.raw,['registro_id'])||''),em=(reg.match(/^ORC:(\d+):/i)||[])[1]||'1';
+      created.push({id:res.id,cod_os:code,n_os:r.os,guid_linha:guid||null,
+       cod_empresa:guid?Number(em):null,status_anterior:r.status,status_novo:status,
+       usuario:profile.name,status:'PENDENTE'});
       statusDone++;acted=true
      }catch(e){success=false;fail.push((r.os||r.quote||key)+' • status: '+e.message)}
     }else skipped++
@@ -1006,8 +1021,9 @@ async function applyBulk(){
    })
   }
   if(created.length){
-   var codes=new Set(created.map(function(p){return String(p.cod_os)}));
-   pendingRequests=pendingRequests.filter(function(p){return !codes.has(String(p.cod_os))}).concat(created)
+   var codes=new Set(created.filter(function(p){return p.cod_os!==null}).map(function(p){return String(p.cod_os)}));
+   var guids=new Set(created.filter(function(p){return p.guid_linha}).map(function(p){return String(p.guid_linha).toUpperCase()}));
+   pendingRequests=pendingRequests.filter(function(p){return !codes.has(String(p.cod_os))&&!guids.has(String(p.guid_linha||'').toUpperCase())}).concat(created)
   }
   applyPendingVisuals();trimFabricSelection();setupFilters();render();
   var report='Tipo: '+typesDone+' atualizado(s) • Status: '+statusDone+' enviado(s) para aprovação'+
