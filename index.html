@@ -969,8 +969,23 @@ async function applyBulk(){
  var tipo=choice?catalogoTipos.find(function(t){return normalize(t.descricao)===choice}):null;
  if(choice&&!tipo){alert('Selecione uma classificação válida no CPS.');return}
  var operacoesTipo=tipo?chosen.all.filter(function(r){return osCode(r)!==null||orcamentoGuid(r)}):[];
- var operacoesStatus=status?chosen.all.filter(function(r){return (osCode(r)!==null||orcamentoGuid(r))&&!r.pending&&normalize(r.status)!==normalize(status)}):[];
- if(!operacoesTipo.length&&!operacoesStatus.length){alert('Não há alterações aplicáveis nos itens selecionados.');return}
+ var operacoesStatus=status?chosen.all.filter(function(r){
+  return (osCode(r)!==null||orcamentoGuid(r))&&normalize(r.status)!==normalize(status)&&
+         (!r.pending||canAdjustPending(r))
+ }):[];
+ if(!operacoesTipo.length&&!operacoesStatus.length){
+  if(status){
+   var pend=chosen.all.filter(function(r){return r.pending&&normalize(r.status)!==normalize(status)}).length;
+   var iguais=chosen.all.filter(function(r){return normalize(r.status)===normalize(status)}).length;
+   var semId=chosen.all.filter(function(r){return osCode(r)===null&&!orcamentoGuid(r)}).length;
+   var motivo=pend?'Há '+pend+' item(ns) com movimentação pendente de outro usuário.':
+      iguais===chosen.all.length?'Todos os itens selecionados já estão no status '+status+'.':
+      semId?'Há '+semId+' item(ns) sem vínculo identificável com o CPS.':
+      'Nenhum dos itens pode ser movimentado. Atualize os dados e tente novamente.';
+   alert(motivo);
+  }else alert('Não há alterações aplicáveis nos itens selecionados.');
+  return
+ }
  if(!confirm('Confirmar alteração em lote?\n\n'+chosen.all.length+' selecionado(s)'+
   (tipo?'\nTipo: '+tipo.descricao+' ('+operacoesTipo.length+' elegíveis)':'')+
   (status?'\nStatus: '+status+' ('+operacoesStatus.length+' solicitações de aprovação)':'')+
@@ -995,16 +1010,24 @@ async function applyBulk(){
    }else if(tipo)skipped++;
    if(status){
     var chaveStatus=code!==null?'OS:'+code:'ORC:'+guid;
-    if((code!==null||guid)&&!r.pending&&normalize(r.status)!==normalize(status)&&!processedOS.has(chaveStatus)){
+    if((code!==null||guid)&&normalize(r.status)!==normalize(status)&&(!r.pending||canAdjustPending(r))&&!processedOS.has(chaveStatus)){
      processedOS.add(chaveStatus);
      try{
-      var res=await api('/controle_fabrica/solicitacoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-       cod_os:code,n_os:r.os,guid_linha:guid||null,status_anterior:r.status,status_novo:status,origem:'GESTAO_FABRICA_LOTE'
-      })});
-      var reg=String(read(r.raw,['registro_id'])||''),em=(reg.match(/^ORC:(\d+):/i)||[])[1]||'1';
-      created.push({id:res.id,cod_os:code,n_os:r.os,guid_linha:guid||null,
-       cod_empresa:guid?Number(em):null,status_anterior:r.status,status_novo:status,
-       usuario:profile.name,status:'PENDENTE'});
+      if(r.pending&&r.pendingInfo&&r.pendingInfo.id){
+       var moved=await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(r.pendingInfo.id)+'/redirecionar',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status_novo:status})
+       });
+       pendingRequests=pendingRequests.filter(function(p){return String(p.id)!==String(r.pendingInfo.id)});
+       if(moved.status!=='CANCELADO')pendingRequests.push(Object.assign({},r.pendingInfo,{status_novo:status}));
+      }else{
+       var res=await api('/controle_fabrica/solicitacoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        cod_os:code,n_os:r.os,guid_linha:guid||null,status_anterior:r.status,status_novo:status,origem:'GESTAO_FABRICA_LOTE'
+       })});
+       var reg=String(read(r.raw,['registro_id'])||''),em=(reg.match(/^ORC:(\d+):/i)||[])[1]||'1';
+       created.push({id:res.id,cod_os:code,n_os:r.os,guid_linha:guid||null,
+        cod_empresa:guid?Number(em):null,status_anterior:r.status,status_novo:status,
+        usuario:profile.name,status:'PENDENTE'});
+      }
       statusDone++;acted=true
      }catch(e){success=false;fail.push((r.os||r.quote||key)+' • status: '+e.message)}
     }else skipped++
