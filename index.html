@@ -391,7 +391,7 @@ var PERMS={'ENGENHARIA':'U_ENG','PCP':'U_PCP','COMPRAS':'U_COMPRAS','PRODUÇÃO'
 var codeStatus={6:'ENGENHARIA',7:'PCP',8:'COMPRAS',9:'PRODUÇÃO',10:'QUALIDADE',11:'FATURAMENTO',12:'EXPEDIÇÃO',13:'CONCLUÍDO',14:'PARALISADO',15:'CANCELADO'};
 var FIELDS=[['type','TIPO'],['client','CLIENTE'],['quote','ORÇAMENTO'],['os','OS'],['product','DESCRIÇÃO'],['qty','QNT.'],['entry','ENTRADA PV'],['agreed','ENTREGA ACORD.'],['value','VALOR'],['status','STATUS CPS'],['autoStatus','STATUS AUTOMÁTICO'],['autoDetail','DETALHAMENTO'],['forecast','PREV. LIBERAÇÃO'],['situation','SITUAÇÃO'],['month','MÊS'],['year','ANO'],['obs','OBSERVAÇÕES'],['invoice','NF'],['invoicedAt','DATA FAT.']];
 var cacheKey='',cacheStamp=0,lastRefreshAt=0,fetchingData=null,hasData=false,initializing=null;
-var CACHE_NAME='brastorno_fabrica_cache_v4',CACHE_TABLE='snapshots',CACHE_SCHEMA=4;
+var CACHE_NAME='brastorno_fabrica_cache_v4',CACHE_TABLE='snapshots',CACHE_SCHEMA=5;
 var excelKey=null,excelValues=[],excelSelected=new Set(),excelSearch='',excelPopupOpen=false;
 var selectedApprovalIds=new Set(),approvalBusy=false;
 var selectedFabricRows=new Set(),bulkBusy=false,bulkStop=false;
@@ -540,7 +540,11 @@ function applyPendingVisuals(){
  });
  var conjunto=baseRows.concat(showHistory&&profile&&profile.gestor?historyRows:[]);
   var ids=new Set();
-  rows=conjunto.filter(function(r){var k=String(read(r.raw,['registro_id'])||r.id);if(ids.has(k))return false;ids.add(k);return true}).map(function(row){
+  rows=conjunto.filter(function(r){
+   // ID da linha inclui OS + orçamento. O registro_id continua sendo o da OS para permissões e Limbo.
+   var k=String(read(r.raw,['linha_id','registro_id'])||r.id);
+   if(ids.has(k))return false;ids.add(k);return true
+  }).map(function(row){
   var r=Object.assign({},row),registro=String(read(row.raw,['registro_id'])||'').trim().toUpperCase();
   var codAuto=read(row.raw,['cod_os','codigo_os','codigo_tos']),empresaAuto=read(row.raw,['cod_empresa','_cod_empresa']);
   var keyEmpresa=(codAuto!==''&&empresaAuto!==''?'OS:'+empresaAuto+':'+codAuto:'');
@@ -864,7 +868,7 @@ function drawTable(arr){
 }
 function selectionId(r){
  if(!r)return '';
- var reg=String(read(r.raw,['registro_id'])||'').trim();if(reg)return reg;
+ var reg=String(read(r.raw,['linha_id','registro_id'])||'').trim();if(reg)return reg;
  var code=osCode(r);if(code!==null)return 'OS:'+code;
  var guid=orcamentoGuid(r);if(guid)return 'ORC:'+guid;
  return String(r.id)
