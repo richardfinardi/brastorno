@@ -450,15 +450,17 @@ var uLibPorStatus=new Map(),liberadosPorStatus=new Set();
 var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoading=null,pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var multiSelections={type:new Set(),status:new Set(),auto:new Set(),period:new Set()},multiOptions={type:[],status:[],auto:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
 var kanbanPendingOnly=false;
-var kanbanColunasOcultas=new Set();
+var kanbanColunasOcultas=new Set(),kanbanFiltroAberto=false;
 try { kanbanColunasOcultas=new Set(JSON.parse(localStorage.getItem('brastorno_kanban_colunas_ocultas')||'[]')); }catch(e){}
 function alternarColunaKanban(nome,ativo){
+ kanbanFiltroAberto=true;
  if(ativo)kanbanColunasOcultas.delete(nome);else kanbanColunasOcultas.add(nome);
  try{localStorage.setItem('brastorno_kanban_colunas_ocultas',JSON.stringify(Array.from(kanbanColunasOcultas)))}catch(e){}
  drawKanban(filtered());
 }
 window.alternarColunaKanban=alternarColunaKanban;
 function todasColunasKanban(ativar){
+ kanbanFiltroAberto=true;
  (statusOrcamentos.map(function(x){return String(x.nome).trim()}).concat(['SEM OS','FATURADO'])).forEach(function(nome){
   if(ativar)kanbanColunasOcultas.delete(nome);else kanbanColunasOcultas.add(nome);
  });
@@ -1362,7 +1364,7 @@ function drawKanban(arr){
    '<div class="lane-head"><span>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
    (cards||'<div class="empty">Sem cartões</div>')+extra+'</section>'
  }).join('');
- var colunasFiltro='<details class="kanban-colunas-filtro"><summary class="btn small">☷ Colunas ('+todasEtapas.length+'/'+opcoesEtapas.length+')</summary>'+
+ var colunasFiltro='<details class="kanban-colunas-filtro" '+(kanbanFiltroAberto?'open ':'')+'ontoggle="kanbanFiltroAberto=this.open"><summary class="btn small">☷ Colunas ('+todasEtapas.length+'/'+opcoesEtapas.length+')</summary>'+
   '<div class="kanban-colunas-menu"><div class="kanban-colunas-acoes"><button class="btn small" onclick="event.preventDefault();todasColunasKanban(true)">Marcar todas</button><button class="btn small" onclick="event.preventDefault();todasColunasKanban(false)">Desmarcar todas</button></div>'+
   opcoesEtapas.map(function(nome){return '<label><input type="checkbox" '+(!kanbanColunasOcultas.has(nome)?'checked ':'')+'onchange="alternarColunaKanban('+JSON.stringify(nome).replace(/"/g,'&quot;')+',this.checked)"><span>'+esc(nome)+'</span></label>'}).join('')+
   '</div></details>';
