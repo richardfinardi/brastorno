@@ -938,32 +938,28 @@ async function openBulk(){
  if(!profile||!profile.gestor||bulkBusy)return;
  var chosen=bulkCandidates();
  if(!chosen.all.length){alert('Selecione pelo menos uma linha.');return}
- if(chosen.all.length>500){alert('O limite é de 500 itens por lote. Refine a seleção.');return}
+ if(chosen.all.length>500){alert('Limite de 500 itens por lote.');return}
  var overlay=$('bulkOverlay');overlay.classList.remove('hidden');
- var exemples=chosen.all.slice(0,8).map(function(r){return esc(r.os||r.quote||'Item')}).join(', ');
+ var exemplos=chosen.all.slice(0,8).map(function(r){return esc(r.os||r.quote||'Item')}).join(', ');
  $('bulkBody').innerHTML='<div class="bulk-summary"><strong>'+chosen.all.length+' selecionado(s)</strong><span>'+
-  chosen.os.length+' OS • '+chosen.quotes.length+' orçamento(s) sem OS'+(chosen.semVinculo?' • '+chosen.semVinculo+' sem identificação':'')+
-  '</span><small>'+exemples+(chosen.all.length>8?' e outros…':'')+'</small></div>'+
-  '<div class="field"><label for="bulkType">Novo tipo / classificação</label><select id="bulkType" disabled><option value="">Carregando...</option></select><small id="bulkTypeHint">Consultando cadastro...</small></div>'+
-  '<div class="field"><label for="bulkStatus">Novo status</label><select id="bulkStatus"><option value="">Não alterar o status</option>'+
-   ['ENGENHARIA','PCP','COMPRAS','PRODUÇÃO','QUALIDADE','FATURAMENTO','EXPEDIÇÃO','CONCLUÍDO','PARALISADO','CANCELADO'].map(function(x){return '<option value="'+esc(x)+'">'+esc(x)+'</option>'}).join('')+
-  '</select><small id="bulkStatusHint">As mudanças de status ficarão aguardando aprovação do gestor, inclusive os itens sem OS.</small></div>'+
-  '<div id="bulkProgress" class="bulk-progress">Escolha o tipo e/ou status e clique em Aplicar alterações.</div>';
- $('bulkApplyBtn').disabled=false;
- $('bulkApplyBtn').textContent='Aplicar alterações';
+   chosen.os.length+' OS • '+chosen.quotes.length+' orçamento(s) sem OS'+(chosen.semVinculo?' • '+chosen.semVinculo+' sem identificação':'')+
+   '</span><small>'+exemplos+(chosen.all.length>8?' e outros…':'')+'</small></div>'+
+   '<div class="field"><label for="bulkType">Novo tipo / classificação</label><select id="bulkType" disabled><option value="">Carregando...</option></select><small id="bulkTypeHint">Consultando cadastro...</small></div>'+
+   '<div class="field"><label for="bulkStatus">Novo status CPS (TST_SERV)</label><select id="bulkStatus" disabled><option value="">Carregando...</option></select><small id="bulkStatusHint">Gestor: alteração direta no CPS, inclusive OS concluídas.</small></div>'+
+   '<div id="bulkProgress" class="bulk-progress">Escolha tipo e/ou status para aplicar as alterações.</div>';
+ $('bulkApplyBtn').disabled=false;$('bulkApplyBtn').textContent='Aplicar alterações';
  $('bulkCloseBtn').textContent='Cancelar';
- if(!tiposCarregados)await carregarTipos();
- if(chosen.quotes.length&&!statusOrcCarregados)await carregarStatusOrcamento();
- if(!overlay.classList.contains('hidden')){
-  renderBulkTypes();
-  if(chosen.quotes.length){
-   var el=$('bulkStatus'),valid=new Set(statusOrcamentos.map(function(x){return normalize(x.nome)}));
-   Array.from(el.options).forEach(function(opt){if(opt.value&&!valid.has(normalize(opt.value)))opt.remove()});
-   el.disabled=!statusOrcCarregados;
-   $('bulkStatusHint').textContent=statusOrcCarregados?
-    'Status dos itens sem OS: somente TST_SERV da empresa 1. Movimentações aguardam aprovação.':
-    'Não foi possível carregar TST_SERV. Apenas alterações de tipo disponíveis.'
-  }
+ var pedidos=await Promise.allSettled([carregarTipos(),carregarStatusOrcamento(true)]);
+ if(overlay.classList.contains('hidden'))return;
+ renderBulkTypes();
+ if(pedidos[1].status==='fulfilled'){
+  $('bulkStatus').innerHTML='<option value="">Não alterar o status</option>'+
+   statusOrcamentos.map(function(x){return '<option value="'+esc(x.codigo)+'">'+esc(x.nome)+' ('+esc(x.codigo)+')</option>'}).join('');
+  $('bulkStatus').disabled=false;
+  $('bulkStatusHint').textContent='Todos os status de TST_SERV (empresa 1), inclusive os recém-cadastrados.';
+ }else{
+  $('bulkStatus').innerHTML='<option value="">Cadastro indisponível</option>';
+  $('bulkStatusHint').textContent='Erro na consulta TST_SERV: '+String(pedidos[1].reason&&pedidos[1].reason.message||'Verifique a API.');
  }
 }
 window.openBulk=openBulk;
@@ -1500,22 +1496,22 @@ async function carregarTipos(){
  return tiposPromise
 }
 
-async function carregarStatusOrcamento(){
+async function carregarStatusOrcamento(forcar){
  if(statusOrcPromise)return statusOrcPromise;
+ if(!forcar&&statusOrcCarregados)return statusOrcamentos;
  statusOrcPromise=(async function(){
   try{
-   var r=await api('/controle_fabrica/status_orcamento');
-   var validos=new Set(STATUS.filter(function(s){return !['SEM OS','FATURADO'].includes(s)}).map(normalize));
-   statusOrcamentos=(Array.isArray(r&&r.status)?r.status:[]).filter(function(x){
-    return x&&x.nome&&validos.has(normalize(x.nome))
-   });
+   var resultado=await api('/controle_fabrica/status_cps_catalogo?at='+Date.now());
+   // Não aplicar allowlist fixa; TST_SERV é a fonte de todos os status novos.
+   statusOrcamentos=(Array.isArray(resultado&&resultado.status)?resultado.status:[])
+    .filter(function(x){return x&&x.codigo!==undefined&&String(x.nome||'').trim()});
    statusOrcCarregados=true;
    if(selected&&$('editStatusOrc'))atualizarSelectStatusOrc();
    return statusOrcamentos
   }catch(e){
-   console.warn('Falha ao carregar status de TST_SERV:',e);
    statusOrcCarregados=false;
-   return []
+   console.warn('Falha ao carregar TST_SERV:',e);
+   throw e;
   }finally{statusOrcPromise=null}
  })();
  return statusOrcPromise
