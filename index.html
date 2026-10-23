@@ -966,80 +966,58 @@ window.openBulk=openBulk;
 async function applyBulk(){
  if(bulkBusy||!profile||!profile.gestor)return;
  var chosen=bulkCandidates(),choice=$('bulkType').value,status=$('bulkStatus').value;
- if(!choice&&!status){alert('Selecione o tipo ou o status que deseja alterar.');return}
- if(chosen.all.length>500){alert('Selecione no máximo 500 itens por vez.');return}
+ if(!choice&&!status){alert('Escolha o tipo e/ou status.');return}
+ if(chosen.all.length>500){alert('Selecione no máximo 500 itens.');return}
  var tipo=choice?catalogoTipos.find(function(t){return normalize(t.descricao)===choice}):null;
- if(choice&&!tipo){alert('Selecione uma classificação válida no CPS.');return}
- var operacoesTipo=tipo?chosen.all.filter(function(r){return osCode(r)!==null||orcamentoGuid(r)}):[];
- var operacoesStatus=status?chosen.all.filter(function(r){
-  return (osCode(r)!==null||orcamentoGuid(r))&&normalize(r.status)!==normalize(status)&&
-         (!r.pending||canAdjustPending(r))
- }):[];
- if(!operacoesTipo.length&&!operacoesStatus.length){
-  if(status){
-   var pend=chosen.all.filter(function(r){return r.pending&&normalize(r.status)!==normalize(status)}).length;
-   var iguais=chosen.all.filter(function(r){return normalize(r.status)===normalize(status)}).length;
-   var semId=chosen.all.filter(function(r){return osCode(r)===null&&!orcamentoGuid(r)}).length;
-   var motivo=pend?'Há '+pend+' item(ns) com movimentação pendente de outro usuário.':
-      iguais===chosen.all.length?'Todos os itens selecionados já estão no status '+status+'.':
-      semId?'Há '+semId+' item(ns) sem vínculo identificável com o CPS.':
-      'Nenhum dos itens pode ser movimentado. Atualize os dados e tente novamente.';
-   alert(motivo);
-  }else alert('Não há alterações aplicáveis nos itens selecionados.');
-  return
- }
- if(!confirm('Confirmar alteração em lote?\n\n'+chosen.all.length+' selecionado(s)'+
-  (tipo?'\nTipo: '+tipo.descricao+' ('+operacoesTipo.length+' elegíveis)':'')+
-  (status?'\nStatus: '+status+' ('+operacoesStatus.length+' solicitações de aprovação)':'')+
-  '\n\nAs operações serão registradas com seu usuário.'))return;
+ if(choice&&!tipo){alert('Tipo não encontrado no cadastro CPS.');return}
+ var novoStatus=status?statusOrcamentos.find(function(t){return String(t.codigo)===String(status)}):null;
+ if(status&&!novoStatus){alert('Status não encontrado em TST_SERV. Reabra o lote.');return}
+ if(!confirm('Confirmar alteração em lote?\\n\\n'+chosen.all.length+' selecionado(s)'+
+  (tipo?'\\nTipo: '+tipo.descricao:'')+(novoStatus?'\\nStatus CPS: '+novoStatus.nome:'')+
+  '\\n\\nGravação direta pelo gestor, com confirmação no banco.'))return;
  bulkBusy=true;bulkStop=false;
- var typesDone=0,statusDone=0,forcedDone=0,skipped=0,fail=[],updated=new Map(),created=[],doneKeys=[],processedOS=new Set();
- $('bulkApplyBtn').disabled=true;
- $('bulkCloseBtn').textContent='Interromper';
+ var typesDone=0,statusDone=0,semMudanca=0,skipped=0,fail=[],updated=new Map(),doneKeys=[],processadosStatus=new Set();
+ $('bulkApplyBtn').disabled=true;$('bulkCloseBtn').textContent='Interromper';
  try{
   for(var i=0;i<chosen.all.length;i++){
    if(bulkStop)break;
-   var r=chosen.all[i],code=osCode(r),guid=orcamentoGuid(r),key=selectionId(r),success=true,acted=false;
-   $('bulkProgress').textContent='Processando '+(i+1)+' de '+chosen.all.length+' • '+typesDone+' tipo(s) • '+statusDone+' status • '+fail.length+' falha(s)';
-   if(tipo&&(code!==null||guid)){
-    try{
-     var source='orcamento',cod=tipo.codigo_orcamento;
-     if(cod===null||cod===undefined)throw Error('Código não localizado no cadastro de itens da empresa 1');
-     var endp=code!==null?'/controle_fabrica/os/'+code+'/tipo':'/controle_fabrica/orcamento_item/'+encodeURIComponent(guid)+'/tipo';
-     await api(endp,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({cod_classificacao:cod,origem:source,classificacao:tipo.descricao})});
-     typesDone++;acted=true;updated.set(key,tipo.descricao)
-    }catch(e){success=false;fail.push((r.os||r.quote||key)+' • tipo: '+e.message)}
-   }else if(tipo)skipped++;
-   if(status){
-    var chaveStatus=code!==null?'OS:'+code:'ORC:'+guid;
-    if((code!==null||guid)&&normalize(r.status)!==normalize(status)&&(!r.pending||canAdjustPending(r))&&!processedOS.has(chaveStatus)){
-     processedOS.add(chaveStatus);
-     try{
-      if(code!==null&&r.status==='FATURAMENTO'&&status==='CONCLUÍDO'){
-       if(!profile.gestor)throw Error('Conclusão com faturamento pendente permitida somente ao gestor');
-       if(r.pending)throw Error('Resolva a movimentação pendente antes da conclusão');
-       await api('/controle_fabrica/os/'+code+'/concluir_forcado',{method:'POST'});
-       forcedDone++;
-      }else if(r.pending&&r.pendingInfo&&r.pendingInfo.id){
-       var moved=await api('/controle_fabrica/solicitacoes/'+encodeURIComponent(r.pendingInfo.id)+'/redirecionar',{
-        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status_novo:status})
-       });
-       pendingRequests=pendingRequests.filter(function(p){return String(p.id)!==String(r.pendingInfo.id)});
-       if(moved.status!=='CANCELADO')pendingRequests.push(Object.assign({},r.pendingInfo,{status_novo:status}));
-      }else{
-       var res=await api('/controle_fabrica/solicitacoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        cod_os:code,n_os:r.os,guid_linha:guid||null,status_anterior:r.status,status_novo:status,origem:'GESTAO_FABRICA_LOTE'
-       })});
-       var reg=String(read(r.raw,['registro_id'])||''),em=(reg.match(/^ORC:(\d+):/i)||[])[1]||'1';
-       created.push({id:res.id,cod_os:code,n_os:r.os,guid_linha:guid||null,
-        cod_empresa:guid?Number(em):null,status_anterior:r.status,status_novo:status,
-        usuario:profile.name,status:'PENDENTE'});
-      }
-      statusDone++;acted=true
-     }catch(e){success=false;fail.push((r.os||r.quote||key)+' • status: '+e.message)}
-    }else skipped++
+   var r=chosen.all[i],code=osCode(r),guid=orcamentoGuid(r),key=selectionId(r),ok=true,acted=false;
+   $('bulkProgress').textContent='Processando '+(i+1)+' de '+chosen.all.length+
+     ' • '+typesDone+' tipo(s) • '+statusDone+' status • '+fail.length+' falha(s)';
+   if(tipo){
+    if(code===null&&!guid){skipped++}
+    else try{
+     if(tipo.codigo_orcamento===null||tipo.codigo_orcamento===undefined)throw Error('Tipo sem código no cadastro de orçamentos.');
+     var tipoUrl=code!==null?'/controle_fabrica/os/'+code+'/tipo_corrigido':
+       '/controle_fabrica/orcamento_item/'+encodeURIComponent(guid)+'/tipo_corrigido';
+     var res=await api(tipoUrl,{method:'PATCH',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({cod_classificacao:tipo.codigo_orcamento,origem:'orcamento',classificacao:tipo.descricao})});
+     if(!res||!['sucesso','sem_alteracao'].includes(res.status)||normalize(res.classificacao)!==normalize(tipo.descricao))
+      throw Error('API não confirmou a classificação no CPS.');
+     if(res.status==='sucesso')typesDone++;else semMudanca++;
+     acted=true;updated.set(key,res.classificacao);
+    }catch(e){ok=false;fail.push((r.os||r.quote||key)+' • tipo: '+e.message)}
    }
-   if(success&&acted)doneKeys.push(key)
+   if(novoStatus){
+    var chave=code!==null?'OS:'+code:'ORC:'+guid;
+    if(code===null&&!guid){skipped++}
+    else if(!processadosStatus.has(chave)){
+     processadosStatus.add(chave);
+     try{
+      var statusUrl=code!==null?'/controle_fabrica/os/'+code+'/status_direto':
+        '/controle_fabrica/orcamento_item/'+encodeURIComponent(guid)+'/status_direto';
+      var resp=await api(statusUrl,{method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({status_novo:novoStatus.codigo})});
+      var confirmado=code!==null?resp&&resp.status_servico:resp&&resp.status_novo;
+      if(!resp||!['sucesso','sem_alteracao'].includes(resp.status)||normalize(confirmado)!==normalize(novoStatus.nome))
+       throw Error('API não confirmou o status no CPS.');
+      if(resp.status==='sucesso')statusDone++;else semMudanca++;
+      acted=true;
+      if(code!==null)pendingRequests=pendingRequests.filter(function(p){return String(p.cod_os)!==String(code)});
+     }catch(e){ok=false;fail.push((r.os||r.quote||key)+' • status: '+e.message)}
+    }
+   }
+   if(ok&&acted)doneKeys.push(key);
   }
  }finally{
   bulkBusy=false;
@@ -1047,27 +1025,24 @@ async function applyBulk(){
   if(updated.size){
    baseRows=baseRows.map(function(row,i){
     var desc=updated.get(selectionId(row));
-    return desc?normalizeItem(rawPatch(row.raw,['tipo','classificacao'],desc),i):row
-   })
-  }
-  if(created.length){
-   var codes=new Set(created.filter(function(p){return p.cod_os!==null}).map(function(p){return String(p.cod_os)}));
-   var guids=new Set(created.filter(function(p){return p.guid_linha}).map(function(p){return String(p.guid_linha).toUpperCase()}));
-   pendingRequests=pendingRequests.filter(function(p){return !codes.has(String(p.cod_os))&&!guids.has(String(p.guid_linha||'').toUpperCase())}).concat(created)
+    return desc?normalizeItem(rawPatch(row.raw,['tipo','classificacao'],desc),i):row;
+   });
   }
   applyPendingVisuals();trimFabricSelection();setupFilters();render();
-  var report='Tipo: '+typesDone+' atualizado(s) • Status: '+statusDone+' solicitado(s)'+(forcedDone?' • Conclusões diretas: '+forcedDone:'')+
-   (skipped?' • '+skipped+' ignorado(s)':'')+(fail.length?' • '+fail.length+' falha(s): '+fail.slice(0,3).join(' | '):'')+
-   (bulkStop?' • Interrompido':'');
+  var report='Tipo: '+typesDone+' gravado(s) • Status CPS: '+statusDone+' gravado(s)'+
+    (semMudanca?' • '+semMudanca+' sem alteração':'')+
+    (skipped?' • '+skipped+' sem vínculo':'')+
+    (fail.length?' • '+fail.length+' falha(s): '+fail.slice(0,5).join(' | '):'')+
+    (bulkStop?' • Interrompido':'');
   $('bulkProgress').textContent=report;
-  $('bulkCloseBtn').textContent='Fechar';
-  $('bulkApplyBtn').disabled=true;
+  $('bulkCloseBtn').textContent='Fechar';$('bulkApplyBtn').disabled=true;
   setNotice(report,fail.length?'warn':'ok');
   if(typesDone||statusDone){
-   if(cacheKey)saveSnapshot(cacheKey,baseRows.map(function(r){return r.raw}),Date.now()).catch(function(){});
-   if(forcedDone){historyLoaded=false;historyRows=[]}
-   Promise.allSettled([loadData({force:true}),loadPending(),profile.gestor?loadApprovals():Promise.resolve(),
-      forcedDone&&showHistory?toggleHistory(true):Promise.resolve()])
+   // Recarrega dados oficiais após confirmação, sem declarar sucesso em falha.
+   var renovarHistorico=showHistory;
+   if(renovarHistorico){historyLoaded=false;historyRows=[];}
+   await Promise.allSettled([loadData({force:true}),loadPending(),profile.gestor?loadApprovals():Promise.resolve()]);
+   if(renovarHistorico)await toggleHistory(true);
   }
  }
 }
