@@ -394,6 +394,15 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .role-status-grupo .role-list{padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px}
 .role-status-grupo .empty{padding:14px;color:#8090a4}
 </style>
+<style id="brastorno-kanban-portal-v2">
+#kanbanColunasPopup.kanban-colunas-portal{position:fixed!important;z-index:2147483000!important;background:#fff;border:1px solid #dce4ee;border-radius:12px;box-shadow:0 15px 45px #172b4c44;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+#kanbanColunasPopup[hidden]{display:none!important}
+#kanbanColunasPopup .kanban-colunas-todas{display:flex;align-items:center;gap:11px;background:#eef3e8;padding:13px 14px;border-bottom:1px solid #dce4ee;cursor:pointer;flex:none}
+#kanbanColunasPopup .kanban-colunas-todas span{margin-left:auto;font-size:11px;color:#62718a}
+#kanbanColunasPopup .kanban-colunas-itens{overflow-y:auto;overscroll-behavior:contain;padding:8px;min-height:0}
+#kanbanColunasPopup .kanban-colunas-itens label{display:flex;align-items:center;gap:10px;padding:9px 8px;cursor:pointer;font-size:12px;color:#192d4d}
+#kanbanColunasPopup input{width:17px;height:17px;accent-color:#718d35;flex-shrink:0}
+</style>
 </head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -1364,17 +1373,73 @@ function drawKanban(arr){
    '<div class="lane-head"><span>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
    (cards||'<div class="empty">Sem cartões</div>')+extra+'</section>'
  }).join('');
- var colunasFiltro='<details class="kanban-colunas-filtro" '+(kanbanFiltroAberto?'open ':'')+'ontoggle="kanbanFiltroAberto=this.open"><summary class="btn small">☷ Colunas ('+todasEtapas.length+'/'+opcoesEtapas.length+')</summary>'+
-  '<div class="kanban-colunas-menu"><div class="kanban-colunas-acoes"><button class="btn small" onclick="event.preventDefault();todasColunasKanban(true)">Marcar todas</button><button class="btn small" onclick="event.preventDefault();todasColunasKanban(false)">Desmarcar todas</button></div>'+
-  opcoesEtapas.map(function(nome){return '<label><input type="checkbox" '+(!kanbanColunasOcultas.has(nome)?'checked ':'')+'onchange="alternarColunaKanban('+JSON.stringify(nome).replace(/"/g,'&quot;')+',this.checked)"><span>'+esc(nome)+'</span></label>'}).join('')+
-  '</div></details>';
+ var colunasFiltro='<button type="button" id="kanbanFiltroBtn" class="btn small" aria-haspopup="dialog" aria-expanded="'+(kanbanFiltroAberto?'true':'false')+'" onclick="toggleKanbanColunas()">☷ Colunas ('+todasEtapas.length+'/'+opcoesEtapas.length+')</button>';
  var button='<button class="btn small kanban-pending-toggle '+(kanbanPendingOnly?'active':'')+'" aria-pressed="'+(kanbanPendingOnly?'true':'false')+'" onclick="toggleKanbanPending()">'+(kanbanPendingOnly?'☑':'☐')+' Somente pendentes</button>';
  $('screen').innerHTML='<section class="panel"><div class="panel-head kanban-head"><div><h2>Gestão visual em cartões</h2></div><div class="panel-actions">'+
   '<span class="tag kanban-pending-count">'+pendingCount+' aguardando aprovação</span>'+colunasFiltro+button+
   '<span class="tag">'+visible.length+' cartões</span></div></div>'+
   '<div class="kanban" ondragover="kanbanDragOver(event)" ondragleave="if(!event.currentTarget.contains(event.relatedTarget))stopKanbanScroll()">'+lanes+'</div></section>';
  var next=$('screen').querySelector('.kanban');if(next){next.scrollLeft=savedLeft;next.scrollTop=savedTop}
+ atualizarPopupColunasKanban(opcoesEtapas);
 }
+// Portal no BODY: o seletor nunca é cortado pelo painel (overflow:hidden).
+function kanbanEtapasDisponiveis(){
+ return Array.from(new Set(statusOrcamentos.map(function(x){return String(x.nome).trim()}).concat(['SEM OS','FATURADO'])));
+}
+function atualizarPopupColunasKanban(opcoes){
+ var popup=document.getElementById('kanbanColunasPopup');
+ if(!popup){
+  popup=document.createElement('div');
+  popup.id='kanbanColunasPopup';
+  popup.className='kanban-colunas-portal';
+  popup.setAttribute('role','dialog');
+  popup.setAttribute('aria-label','Selecionar colunas do Kanban');
+  document.body.appendChild(popup);
+ }
+ var marcadas=opcoes.filter(function(nome){return !kanbanColunasOcultas.has(nome)}).length;
+ popup.innerHTML='<label class="kanban-colunas-todas"><input id="kanbanSelecionarTudo" type="checkbox" '+(marcadas===opcoes.length?'checked ':'')+' onchange="todasColunasKanban(this.checked)"><strong>Selecionar tudo</strong><span>'+marcadas+'/'+opcoes.length+'</span></label>'+
+  '<div class="kanban-colunas-itens">'+opcoes.map(function(nome){
+   return '<label><input type="checkbox" '+(!kanbanColunasOcultas.has(nome)?'checked ':'')+
+    ' onchange="alternarColunaKanban('+JSON.stringify(nome).replace(/"/g,'&quot;')+',this.checked)"><span>'+esc(nome)+'</span></label>'
+  }).join('')+'</div>';
+ var tudo=popup.querySelector('#kanbanSelecionarTudo');
+ if(tudo)tudo.indeterminate=marcadas>0&&marcadas<opcoes.length;
+ var botao=document.getElementById('kanbanFiltroBtn');
+ popup.hidden=!kanbanFiltroAberto||!botao;
+ if(botao)botao.setAttribute('aria-expanded',String(kanbanFiltroAberto));
+ if(!popup.hidden){
+  var rect=botao.getBoundingClientRect(),largura=Math.min(310,innerWidth-16);
+  popup.style.width=largura+'px';
+  popup.style.left=Math.max(8,Math.min(rect.right-largura,innerWidth-largura-8))+'px';
+  var topo=rect.bottom+8,alturaAbaixo=innerHeight-topo-8;
+  if(alturaAbaixo<180&&rect.top>alturaAbaixo) {
+   popup.style.top='auto';
+   popup.style.bottom=Math.max(8,innerHeight-rect.top+8)+'px';
+   popup.style.maxHeight=Math.max(120,rect.top-20)+'px';
+  }else{
+   popup.style.bottom='auto';
+   popup.style.top=topo+'px';
+   popup.style.maxHeight=Math.max(120,alturaAbaixo)+'px';
+  }
+ }
+}
+function toggleKanbanColunas(){
+ kanbanFiltroAberto=!kanbanFiltroAberto;
+ atualizarPopupColunasKanban(kanbanEtapasDisponiveis());
+}
+window.toggleKanbanColunas=toggleKanbanColunas;
+document.addEventListener('pointerdown',function(e){
+ if(!kanbanFiltroAberto)return;
+ var menu=document.getElementById('kanbanColunasPopup'),btn=document.getElementById('kanbanFiltroBtn');
+ if((menu&&menu.contains(e.target))||(btn&&btn.contains(e.target)))return;
+ kanbanFiltroAberto=false;if(menu)menu.hidden=true;if(btn)btn.setAttribute('aria-expanded','false');
+});
+document.addEventListener('keydown',function(e){
+ if(e.key!=='Escape'||!kanbanFiltroAberto)return;
+ kanbanFiltroAberto=false;
+ var menu=document.getElementById('kanbanColunasPopup'),btn=document.getElementById('kanbanFiltroBtn');
+ if(menu)menu.hidden=true;if(btn){btn.setAttribute('aria-expanded','false');btn.focus()}
+});
 function toggleKanbanPending(){kanbanPendingOnly=!kanbanPendingOnly;drawKanban(filtered())}
 window.toggleKanbanPending=toggleKanbanPending;
 function showMoreLane(status){laneLimits[status]=(laneLimits[status]||45)+45;drawKanban(filtered())}
@@ -1533,7 +1598,7 @@ function toggleApprovalAll(yes){
 }
 window.toggleApprovalAll=toggleApprovalAll;
 function batchDecision(approve){return runApprovalBatch(Array.from(selectedApprovalIds),approve)}window.batchDecision=batchDecision;
-function render(){if(!profile)return;var noLimbo=view!=='limbo';$('metrics').classList.toggle('hidden',!noLimbo);$('filterPanel').classList.toggle('hidden',!noLimbo);if(!noLimbo){drawLimbo();return}var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(Array.isArray(f.values)?f.values.length+' selecionado(s)':f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
+function render(){if(!profile)return;if(view!=='kanban'){kanbanFiltroAberto=false;var pp=document.getElementById('kanbanColunasPopup');if(pp)pp.hidden=true;}var noLimbo=view!=='limbo';$('metrics').classList.toggle('hidden',!noLimbo);$('filterPanel').classList.toggle('hidden',!noLimbo);if(!noLimbo){drawLimbo();return}var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(Array.isArray(f.values)?f.values.length+' selecionado(s)':f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
 if(view==='fabric')drawTable(arr);else if(view==='status')drawStatus(arr);else if(view==='roles')drawRoles(arr);else if(view==='kanban')drawKanban(arr);else drawApprovals()}
 function changeView(v){
  if(!profile)return;
