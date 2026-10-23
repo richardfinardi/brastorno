@@ -1254,7 +1254,8 @@ function drawKanban(arr){
  var pendingCount=arr.filter(function(r){return r.pending}).length;
  var visible=kanbanPendingOnly?arr.filter(function(r){return r.pending}):arr;
  var previous=$('screen').querySelector('.kanban'),savedLeft=previous?previous.scrollLeft:0,savedTop=previous?previous.scrollTop:0;
- var lanes=STATUS.filter(function(s){return !['CANCELADO','CONCLUÍDO','FATURADO'].includes(s)||(showHistory&&profile&&profile.gestor)}).map(function(s){
+ var todasEtapas=Array.from(new Set(STATUS.concat(visible.map(function(r){return r.status}).filter(Boolean))));
+ var lanes=todasEtapas.map(function(s){
   var items=sorting(visible.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
@@ -1481,7 +1482,20 @@ async function carregarStatusOrcamento(forcar){
    statusOrcamentos=(Array.isArray(resultado&&resultado.status)?resultado.status:[])
     .filter(function(x){return x&&x.codigo!==undefined&&String(x.nome||'').trim()});
    statusOrcCarregados=true;
-   if(selected&&$('editStatusOrc'))atualizarSelectStatusOrc();
+   // TST_SERV é a fonte das colunas do Kanban, inclusive novos cadastros.
+   statusOrcamentos.forEach(function(x){
+    var nome=String(x.nome).trim(),codigo=Number(x.codigo);
+    if(!STATUS.some(function(existente){return normalize(existente)===normalize(nome)}))STATUS.push(nome);
+    if(Number.isFinite(codigo))codeStatus[codigo]=nome;
+   });
+   if(selected&&($('editStatusOrc')||$('editStatusCps')))atualizarSelectStatusOrc();
+   // Reclassifica registros carregados a partir dos códigos oficiais atualizados.
+   if(baseRows.length){
+    baseRows=baseRows.map(function(r,i){return normalizeItem(r.raw,i)});
+    if(historyRows.length)historyRows=historyRows.map(function(r,i){return normalizeItem(r.raw,i)});
+    applyPendingVisuals();setupFilters();
+    if(view==='kanban')render();
+   }
    return statusOrcamentos
   }catch(e){
    statusOrcCarregados=false;
