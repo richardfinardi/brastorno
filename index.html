@@ -398,6 +398,7 @@ var selectedFabricRows=new Set(),bulkBusy=false,bulkStop=false;
 var limboRows=[],limboSelected=new Set(),limboLoaded=false,limboBusy=false,notePendingId=null;
 var catalogoTipos=[],tiposPromise=null,tiposCarregados=false;
 var statusOrcamentos=[],statusOrcPromise=null,statusOrcCarregados=false;
+var uLibPorStatus=new Map(),liberadosPorStatus=new Set();
 var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoading=null,pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var multiSelections={type:new Set(),status:new Set(),auto:new Set(),period:new Set()},multiOptions={type:[],status:[],auto:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
 var kanbanPendingOnly=false;
@@ -635,7 +636,7 @@ baseRows=raw.map(normalizeItem).filter(function(r){
  render();
  if(!fromCache)setNotice('')
 }
-function parseProfile(p){var src=(p&&p.permissoes)||p&&p.permissions||p||{};var gestor=truthy(read(src,['U_GESTOR','gestor']));var roles=STATUS.filter(function(s){return PERMS[s]&&truthy(read(src,[PERMS[s]]))});return {gestor:gestor,roles:roles,name:read(p,['usuario','nome','username'])||localStorage.getItem('brastorno_usuario_nome')||'USUÁRIO'}}
+function parseProfile(p){var src=(p&&p.permissoes)||p&&p.permissions||p||{};var gestor=truthy(read(src,['U_GESTOR','gestor']));var flags=Object.keys(PERMS).map(function(k){return PERMS[k]}).filter(function(f){return truthy(read(src,[f]))});var roles=STATUS.filter(function(s){return PERMS[s]&&flags.includes(PERMS[s])});return {gestor:gestor,flags:flags,roles:roles,name:read(p,['usuario','nome','username'])||localStorage.getItem('brastorno_usuario_nome')||'USUÁRIO'}}
 function flattenResult(v){if(Array.isArray(v))return v;if(!v||typeof v!=='object')return [];for(var i=0;i<['dados','data','resultado','resultados','itens','items','rows','registros','records'].length;i++){var x=read(v,[['dados','data','resultado','resultados','itens','items','rows','registros','records'][i]]);if(Array.isArray(x))return x;if(x&&typeof x==='object'){var y=flattenResult(x);if(y.length)return y}}return []}
 function statusOf(raw){
  // Conclusão excepcional autorizada pelo gestor; vale antes das regras de faturamento.
@@ -695,7 +696,15 @@ var situacaoNormalizada=normalize(situation);
 urgent=!isDone&&(situacaoNormalizada.includes('ATRASAD')||situacaoNormalizada.includes('VENCID')||situacaoNormalizada.includes('AVISAR AO COMERCIAL')||situacaoNormalizada.includes('PREVISAO ACIMA DO ACORDADO'));
 var id=String(read(raw,['guid_linha','id','codigo_item','cod_os','codigo'])||'')+'|'+os+'|'+quote+'|'+i;
 return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),cpsStatus:noOS?status:(codeStatus[Number(read(raw,['cod_status','status_codigo','codigo_status']))]||String(read(raw,['status_servico','status'])||status)),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:obsPlain(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
-function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus))})}
+function statusAutorizado(r){
+ if(profile&&profile.gestor)return true;
+ if(!profile||!statusOrcCarregados)return false;
+ var codigo=Number(read(r.raw,['cod_status','codigo_status','status_codigo']));
+ if(Number.isFinite(codigo)&&codigo>0)return liberadosPorStatus.has(codigo);
+ var nome=normalize(read(r.raw,['status_servico','status_item','status'])||r.cpsStatus||r.status);
+ return statusOrcamentos.some(function(x){return liberadosPorStatus.has(Number(x.codigo))&&normalize(x.nome)===nome});
+}
+function visibleRows(){return rows.filter(statusAutorizado)}
 function filtered(exceptKey){var q=normalize($('q').value),type=multiSelections.type,status=multiSelections.status,per=multiSelections.period,releaseFrom=$('releaseFrom').value,releaseTo=$('releaseTo').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
 return visibleRows().filter(function(r){if(type.size&&!type.has(r.type))return false;if(status.size&&!status.has(r.status))return false;if(multiSelections.auto.size&&!multiSelections.auto.has(r.autoStatus))return false;
 if(per.size){
@@ -1246,7 +1255,7 @@ function drawRoles(arr){
  var sorted=sorting(arr),cards=sorted.slice(0,rolesLimit).map(tile).join('');
  var more=arr.length>rolesLimit?'<button class="btn small" style="margin:10px 16px 18px" onclick="moreRoles()">Mostrar mais '+Math.min(100,arr.length-rolesLimit)+' de '+(arr.length-rolesLimit)+' restantes</button>':'';
  $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2></div><span class="tag">'+arr.length+' disponíveis</span></div>'+
- '<div class="role"><div class="field"><label>Setor</label><div class="role-caption">'+(profile.gestor?'TODAS AS ETAPAS':profile.roles.map(esc).join(' • '))+'</div></div></div>'+
+ '<div class="role"><div class="field"><label>Setor</label><div class="role-caption">'+(profile.gestor?'TODAS AS ETAPAS':statusOrcamentos.filter(function(x){return liberadosPorStatus.has(Number(x.codigo))}).map(function(x){return esc(x.nome)}).join(' • '))+'</div></div></div>'+
  '<div class="role-list">'+(cards||'<div class="empty">Nenhum item neste status.</div>')+'</div>'+more+'</section>'
 }
 function moreRoles(){rolesLimit+=100;drawRoles(filtered())}window.moreRoles=moreRoles;
@@ -1254,9 +1263,9 @@ function drawKanban(arr){
  var pendingCount=arr.filter(function(r){return r.pending}).length;
  var visible=kanbanPendingOnly?arr.filter(function(r){return r.pending}):arr;
  var previous=$('screen').querySelector('.kanban'),savedLeft=previous?previous.scrollLeft:0,savedTop=previous?previous.scrollTop:0;
- var todasEtapas=Array.from(new Set(STATUS.concat(visible.map(function(r){return r.status}).filter(Boolean))));
+ var todasEtapas=Array.from(new Set((profile.gestor?STATUS:statusOrcamentos.filter(function(x){return liberadosPorStatus.has(Number(x.codigo))}).map(function(x){return x.nome})).concat(visible.map(function(r){return r.status}).filter(function(s){return profile.gestor||statusOrcamentos.some(function(x){return liberadosPorStatus.has(Number(x.codigo))&&normalize(x.nome)===normalize(s)})}))));
  var lanes=todasEtapas.map(function(s){
-  var items=sorting(visible.filter(function(r){return r.status===s})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
+  var items=sorting(visible.filter(function(r){return normalize(profile.gestor?r.status:(r.cpsStatus||r.status))===normalize(s)})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
    '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+plainLabel(r.status)+'</strong>'+
@@ -1482,6 +1491,12 @@ async function carregarStatusOrcamento(forcar){
    statusOrcamentos=(Array.isArray(resultado&&resultado.status)?resultado.status:[])
     .filter(function(x){return x&&x.codigo!==undefined&&String(x.nome||'').trim()});
    statusOrcCarregados=true;
+   uLibPorStatus=new Map();liberadosPorStatus=new Set();
+   statusOrcamentos.forEach(function(x){
+    var perm=String(x.u_lib||'').toUpperCase().match(/U_(?:ENG|PCP|COMPRAS|PROD|CQ|FAT|EXP)/g)||[];
+    uLibPorStatus.set(Number(x.codigo),perm);
+    if(profile&&profile.flags&&perm.some(function(f){return profile.flags.includes(f)}))liberadosPorStatus.add(Number(x.codigo));
+   });
    // TST_SERV é a fonte das colunas do Kanban, inclusive novos cadastros.
    statusOrcamentos.forEach(function(x){
     var nome=String(x.nome).trim(),codigo=Number(x.codigo);
@@ -1872,7 +1887,8 @@ async function loadAll(){
    if(!freshProfile.gestor&&!freshProfile.roles.length)throw Error('Usuário sem liberação para Controle de Fábrica.');
    var newKey=cacheId(freshProfile),changed=cacheKey!==newKey;
    profile=freshProfile;cacheKey=newKey;
-   if(changed){selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;limboRows=[];limboLoaded=false;limboSelected.clear();pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;statusOrcamentos=[];statusOrcCarregados=false;autoStatuses=new Map();autoDetails=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
+   if(changed){statusOrcCarregados=false;uLibPorStatus=new Map();liberadosPorStatus=new Set();selectedFabricRows.clear();rows=[];baseRows=[];historyRows=[];historyLoaded=false;showHistory=false;limboRows=[];limboLoaded=false;limboSelected.clear();pendingRequests=[];hasData=false;cacheStamp=0;catalogoTipos=[];tiposCarregados=false;statusOrcamentos=[];statusOrcCarregados=false;autoStatuses=new Map();autoDetails=new Map();autoLoaded=false;autoError='';multiSelections.type.clear();multiSelections.status.clear();multiSelections.auto.clear();multiSelections.period.clear()}
+   await carregarStatusOrcamento(true);
    $('userName').textContent=profile.name;
    $('profileLabel').textContent=profile.gestor?'GESTOR':profile.roles.join(' • ');
    $('tabs').classList.remove('hidden');$('metrics').classList.remove('hidden');$('filterPanel').classList.remove('hidden');
@@ -1897,7 +1913,7 @@ async function loadAll(){
    loadData({silent:true});
    loadAutoStatuses();
    loadPending();
-   if(profile.gestor){carregarTipos();carregarStatusOrcamento();loadApprovals();}
+   if(profile.gestor){carregarTipos();loadApprovals();}
   }catch(err){
    // Não exibe qualquer dado local se as permissões não forem validadas.
    profile=null;hasData=false;rows=[];cacheKey='';
