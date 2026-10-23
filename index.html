@@ -387,6 +387,13 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .kanban-colunas-menu input{accent-color:#718d35}
 .kanban-colunas-acoes{display:flex;gap:6px;padding:2px 0 8px;border-bottom:1px solid #e5eaf0;margin-bottom:5px}
 </style>
+<style id="brastorno-controle-por-status">
+.role-status-grupos{padding:12px 16px;display:flex;flex-direction:column;gap:16px}
+.role-status-grupo{border:1px solid #e1e7ee;border-radius:12px;padding:10px;background:#fafbfd}
+.role-status-titulo{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 6px 11px;color:#172c4d}
+.role-status-grupo .role-list{padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px}
+.role-status-grupo .empty{padding:14px;color:#8090a4}
+</style>
 </head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -1309,11 +1316,22 @@ function drawStatus(arr){
 }
 function tile(r){return '<article class="task"><div class="task-head"><strong>'+esc(r.os||r.quote||'Sem OS')+'</strong>'+label(r.status,r)+'</div><h3>'+esc(r.product)+'</h3><p>'+esc(r.client)+' · '+esc(r.type)+' · '+esc(r.qty||'—')+' un.</p>'+(r.autoStatus&&r.autoStatus!=='—'?'<div class="auto-mini"><b>STATUS AUTOMÁTICO</b><br>'+esc(r.autoStatus)+(r.autoDetail&&r.autoDetail!=='—'?'<small class="auto-detail-mini">'+esc(r.autoDetail)+'</small>':'')+'</div>':'')+'<div class="task-foot"><span>Liberação: '+human(r.forecast)+'</span><button class="action" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">Abrir</button></div>'+(r.pending?'<span class="pending-badge">Aguardando aprovação</span>':'')+(r.urgent?'<span class="tag bad">'+esc(r.situation)+'</span>':'')+'</article>'}
 function drawRoles(arr){
- var sorted=sorting(arr),cards=sorted.slice(0,rolesLimit).map(tile).join('');
- var more=arr.length>rolesLimit?'<button class="btn small" style="margin:10px 16px 18px" onclick="moreRoles()">Mostrar mais '+Math.min(100,arr.length-rolesLimit)+' de '+(arr.length-rolesLimit)+' restantes</button>':'';
- $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2></div><span class="tag">'+arr.length+' disponíveis</span></div>'+
- '<div class="role"><div class="field"><label>Setor</label><div class="role-caption">'+(profile.gestor?'TODAS AS ETAPAS':statusOrcamentos.filter(function(x){return liberadosPorStatus.has(Number(x.codigo))}).map(function(x){return esc(x.nome)}).join(' • '))+'</div></div></div>'+
- '<div class="role-list">'+(cards||'<div class="empty">Nenhum item neste status.</div>')+'</div>'+more+'</section>'
+ // Controle por Status: cada etapa TST_SERV aparece como setor, inclusive novas etapas.
+ // Os cartões seguem as liberações do usuário em CSENHA + TST_SERV.U_LIB.
+ var colunas=Array.from(new Set(statusOrcamentos.map(function(x){return String(x.nome).trim()}).concat(['SEM OS','FATURADO'])));
+ if(!statusOrcCarregados)colunas=STATUS.slice();
+ var grupos=colunas.map(function(nome){
+  var items=sorting(arr.filter(function(r){
+   return normalize(r.pending?r.status:(r.cpsStatus||r.status))===normalize(nome)
+  }));
+  var exibidos=items.slice(0,rolesLimit);
+  return '<section class="role-status-grupo"><div class="role-status-titulo"><strong>'+esc(nome)+'</strong><span class="tag">'+items.length+' item(ns)</span></div>'+
+   '<div class="role-list">'+(exibidos.map(tile).join('')||'<div class="empty">Sem itens liberados neste status.</div>')+'</div>'+
+   (items.length>rolesLimit?'<button class="btn small" onclick="moreRoles()">Mostrar mais ('+(items.length-rolesLimit)+')</button>':'')+'</section>'
+ }).join('');
+ $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2><p>Todas as etapas cadastradas na TST_SERV; itens conforme sua permissão.</p></div><span class="tag">'+arr.length+' disponíveis</span></div>'+
+ '<div class="role"><div class="field"><label>Setores liberados</label><div class="role-caption">'+(profile.gestor?'TODAS AS ETAPAS':statusOrcamentos.filter(function(x){return liberadosPorStatus.has(Number(x.codigo))}).map(function(x){return esc(x.nome)}).join(' • '))+'</div></div></div>'+
+ '<div class="role-status-grupos">'+grupos+'</div></section>';
 }
 function moreRoles(){rolesLimit+=100;drawRoles(filtered())}window.moreRoles=moreRoles;
 function drawKanban(arr){
