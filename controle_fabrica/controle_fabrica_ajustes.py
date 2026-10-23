@@ -193,40 +193,76 @@ def gravar_tipo_orc(guid,payload,usuario):
         conn.close()
 
 
-def gravar_status(cod_os,payload,usuario):
-    gestor(usuario)
-    v=payload.status_novo
+
+def _todos_status(cur):
+    # Consulta sempre o cadastro CPS. Nenhuma lista fixa de códigos.
+    cur.execute("SELECT codigo,nome FROM tst_serv WHERE cod_empresa=1 ORDER BY codigo")
+    valores=[]
+    for codigo,nome in cur.fetchall():
+        if codigo is not None and str(nome or "").strip():
+            valores.append({"codigo":int(codigo),"nome":str(nome).strip()})
+    return valores
+
+
+def _resolver_status(cur, entrada):
+    todos=_todos_status(cur)
     try:
-        codigo=int(v)
-    except (TypeError,ValueError):
-        codigo=next((c for c,s in STATUS.items() if normalizar(s)==normalizar(v)),None)
-    if codigo not in STATUS:
-        raise HTTPException(422,"Status inválido (permitidos 6 a 15).")
+        numero=int(entrada)
+    except (ValueError,TypeError):
+        numero=None
+    encontrados=([x for x in todos if x["codigo"]==numero] if numero is not None
+               else [x for x in todos if normalizar(x["nome"])==normalizar(entrada)])
+    if len(encontrados)!=1:
+        raise HTTPException(422,"Status não encontrado ou ambíguo em TST_SERV (empresa 1).")
+    return encontrados[0]
+
+
+def consultar_status(usuario):
+    gestor(usuario)
     conn=get_conn()
     try:
         cur=conn.cursor()
         try:
+            return {"status":_todos_status(cur)}
+        finally:
+            cur.close()
+    finally:
+        conn.close()
+
+
+def gravar_status(cod_os,payload,usuario):
+    gestor(usuario)
+    conn=get_conn()
+    try:
+        cur=conn.cursor()
+        try:
+            destino=_resolver_status(cur,payload.status_novo)
+            codigo,nome=destino["codigo"],destino["nome"]
             lock=" FOR UPDATE" if IS_PG else ""
             cur.execute(f"""SELECT cod_status,status_servico,u_hist FROM tos
                 WHERE cod_empresa=1 AND codigo={P}{lock}""",(cod_os,))
             antes=cur.fetchone()
             if not antes:
                 raise HTTPException(404,"OS não encontrada.")
-            if int(antes[0] or 0)==codigo and normalizar(antes[1])==normalizar(STATUS[codigo]):
-                return {"status":"sem_alteracao","cod_os":cod_os,"cod_status":codigo,"status_servico":STATUS[codigo]}
+            if int(antes[0] or 0)==codigo and normalizar(antes[1])==normalizar(nome):
+                return {"status":"sem_alteracao","cod_os":cod_os,
+                        "cod_status":codigo,"status_servico":nome}
             log=registrar(antes[2],usuario,
-                f"STATUS CPS GESTOR: {antes[0]} ({antes[1]}) -> {codigo} ({STATUS[codigo]})"+(
+                f"STATUS CPS GESTOR: {antes[0]} ({antes[1]}) -> {codigo} ({nome})"+(
                 f" | OBS: {payload.observacao.strip()}" if payload.observacao and payload.observacao.strip() else ""))
+            # Concluído e cancelado afetam as flags do CPS; os demais status as reabrem.
+            concluido=int(normalizar(nome)=="CONCLUIDO" or codigo==13)
+            cancelado=int(normalizar(nome)=="CANCELADO" or codigo==15)
             cur.execute(f"""UPDATE tos SET cod_status={P},status_servico={P},
                 aprovado=1,concluido={P},cancelado={P},u_hist={P}
                 WHERE cod_empresa=1 AND codigo={P}""",
-                (codigo,STATUS[codigo],int(codigo==13),int(codigo==15),log,cod_os))
+                (codigo,nome,concluido,cancelado,log,cod_os))
             if cur.rowcount!=1:
                 raise HTTPException(409,"Status não gravado.")
             cur.execute(f"SELECT cod_status,status_servico,concluido,cancelado FROM tos WHERE cod_empresa=1 AND codigo={P}",(cod_os,))
             depois=cur.fetchone()
-            if (not depois or int(depois[0] or 0)!=codigo or normalizar(depois[1])!=normalizar(STATUS[codigo])
-                or int(depois[2] or 0)!=int(codigo==13) or int(depois[3] or 0)!=int(codigo==15)):
+            if (not depois or int(depois[0] or 0)!=codigo or normalizar(depois[1])!=normalizar(nome)
+                or int(depois[2] or 0)!=concluido or int(depois[3] or 0)!=cancelado):
                 raise HTTPException(409,"Status não conferiu após a gravação.")
             conn.commit()
         finally:
@@ -236,7 +272,7 @@ def gravar_status(cod_os,payload,usuario):
         raise
     finally:
         conn.close()
-    # Cancelar solicitações antigas dessa OS para não reaplicar status desatualizado.
+    # Pendências anteriores não podem sobrescrever o status gravado pelo gestor.
     fila=Path(os.getenv("CONTROLE_FABRICA_DB") or Path(__file__).resolve().parent/"controle_fabrica_pendencias.sqlite3")
     if fila.is_file():
         try:
@@ -245,9 +281,57 @@ def gravar_status(cod_os,payload,usuario):
                     avaliado_em=?,avaliado_por=? WHERE cod_os=? AND status='PENDENTE'""",
                     (datetime.now(BR).isoformat(timespec="seconds"),usuario,cod_os))
         except sqlite3.Error:
-            pass  # CPS já foi gravado: jamais reportar que o status não foi salvo.
+            pass
     return {"status":"sucesso","cod_os":cod_os,"cod_status":codigo,
-            "status_servico":STATUS[codigo],"concluido":codigo==13,"cancelado":codigo==15}
+            "status_servico":nome,"concluido":bool(concluido),"cancelado":bool(cancelado)}
+
+
+def gravar_status_orc(guid,payload,usuario):
+    """Orçamento sem OS: salva seu status na STRING1 sem fingir que existe TOS."""
+    gestor(usuario)
+    conn=get_conn()
+    try:
+        cur=conn.cursor()
+        try:
+            destino=_resolver_status(cur,payload.status_novo)
+            expr="CAST(oi.guid_linha AS VARCHAR(64))" if not IS_PG else "oi.guid_linha::text"
+            lock=" FOR UPDATE" if IS_PG else ""
+            cur.execute(f"""SELECT oi.cod_orcamento,oi.string1 FROM torcamento_itens oi
+                WHERE oi.cod_empresa=1 AND UPPER({expr})=UPPER({P}){lock}""",(guid.strip(),))
+            reg=cur.fetchall()
+            if len(reg)!=1:
+                raise HTTPException(404 if not reg else 409,"Item não localizado unicamente.")
+            orc_id,anterior=reg[0]
+            cur.execute(f"""SELECT COUNT(*) FROM torcamento_itens oi
+                JOIN tsol_max_os sm ON sm.cod_empresa=oi.cod_empresa AND sm.guid_lm=oi.guid_linha
+                JOIN tos_solicitacao_necessidade sn
+                ON sn.cod_empresa=sm.cod_empresa AND sn.guid_solicitacao=sm.guid_pai
+                WHERE oi.cod_empresa=1 AND oi.cod_orcamento={P} AND UPPER({expr})=UPPER({P})""",
+                (orc_id,guid.strip()))
+            if int(cur.fetchone()[0] or 0):
+                raise HTTPException(409,"Este item possui OS. Mude o status da OS.")
+            nome=destino["nome"]
+            if normalizar(anterior)==normalizar(nome):
+                return {"status":"sem_alteracao","status_novo":nome}
+            cur.execute(f"""UPDATE torcamento_itens SET string1={P}
+                WHERE cod_empresa=1 AND UPPER(CAST(guid_linha AS VARCHAR(64)))=UPPER({P})""",
+                (nome,guid.strip()))
+            if cur.rowcount!=1:
+                raise HTTPException(409,"Status do orçamento não gravado.")
+            cur.execute(f"""SELECT string1 FROM torcamento_itens
+                WHERE cod_empresa=1 AND UPPER(CAST(guid_linha AS VARCHAR(64)))=UPPER({P})""",(guid.strip(),))
+            ver=cur.fetchone()
+            if not ver or normalizar(ver[0])!=normalizar(nome):
+                raise HTTPException(409,"Status de orçamento não conferiu.")
+            conn.commit()
+            return {"status":"sucesso","status_novo":nome,"cod_orcamento":orc_id}
+        finally:
+            cur.close()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 @router.patch("/os/{cod_os}/tipo_corrigido")
@@ -263,3 +347,12 @@ async def tipo_orc(guid:str,payload:TipoPayload,usuario:str=Depends(obter_usuari
 @router.patch("/os/{cod_os}/status_direto")
 async def status_os(cod_os:int,payload:StatusPayload,usuario:str=Depends(obter_usuario_logado)):
     return await run_in_threadpool(gravar_status,cod_os,payload,usuario)
+
+@router.get("/status_cps_catalogo")
+async def status_cps_catalogo(usuario:str=Depends(obter_usuario_logado)):
+    return await run_in_threadpool(consultar_status,usuario)
+
+
+@router.patch("/orcamento_item/{guid}/status_direto")
+async def status_orc(guid:str,payload:StatusPayload,usuario:str=Depends(obter_usuario_logado)):
+    return await run_in_threadpool(gravar_status_orc,guid,payload,usuario)
