@@ -1263,7 +1263,18 @@ function drawKanban(arr){
  var pendingCount=arr.filter(function(r){return r.pending}).length;
  var visible=kanbanPendingOnly?arr.filter(function(r){return r.pending}):arr;
  var previous=$('screen').querySelector('.kanban'),savedLeft=previous?previous.scrollLeft:0,savedTop=previous?previous.scrollTop:0;
- var todasEtapas=Array.from(new Set((profile.gestor?STATUS:statusOrcamentos.filter(function(x){return liberadosPorStatus.has(Number(x.codigo))}).map(function(x){return x.nome})).concat(visible.map(function(r){return r.status}).filter(function(s){return profile.gestor||statusOrcamentos.some(function(x){return liberadosPorStatus.has(Number(x.codigo))&&normalize(x.nome)===normalize(s)})}))));
+ // Cada registro TST_SERV gera uma coluna, INDEPENDENTEMENTE de haver cartões.
+ // O gestor enxerga TODOS; demais usuários apenas as etapas com U_LIB liberado.
+ var catalogoColunas=statusOrcamentos.filter(function(x){
+  return profile.gestor||liberadosPorStatus.has(Number(x.codigo))
+ }).map(function(x){return String(x.nome).trim()});
+ var todasEtapas=Array.from(new Set(catalogoColunas.concat(
+   profile.gestor?['SEM OS','FATURADO']:[]
+ )));
+ // Se a API ainda estiver carregando, preserva as etapas padrão sem esconder as novas.
+ if(!statusOrcCarregados){
+  todasEtapas=profile.gestor?STATUS.slice():[];
+ }
  var lanes=todasEtapas.map(function(s){
   var items=sorting(visible.filter(function(r){return normalize(profile.gestor?r.status:(r.cpsStatus||r.status))===normalize(s)})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
@@ -1438,7 +1449,19 @@ window.toggleApprovalAll=toggleApprovalAll;
 function batchDecision(approve){return runApprovalBatch(Array.from(selectedApprovalIds),approve)}window.batchDecision=batchDecision;
 function render(){if(!profile)return;var noLimbo=view!=='limbo';$('metrics').classList.toggle('hidden',!noLimbo);$('filterPanel').classList.toggle('hidden',!noLimbo);if(!noLimbo){drawLimbo();return}var arr=filtered();metrics(arr);$('chips').innerHTML=extraFilters.map(function(f,i){return '<span class="chip">'+esc(FIELDS.find(function(x){return x[0]===f.k})?.[1]||f.k)+': '+esc(Array.isArray(f.values)?f.values.length+' selecionado(s)':f.v)+' <button onclick="removeFilter('+i+')">×</button></span>'}).join('');
 if(view==='fabric')drawTable(arr);else if(view==='status')drawStatus(arr);else if(view==='roles')drawRoles(arr);else if(view==='kanban')drawKanban(arr);else drawApprovals()}
-function changeView(v){if(!profile)return;if(!profile.gestor&&['fabric','status','approval','limbo'].includes(v))return;view=v;['fabric','status','roles','kanban','approval','limbo'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===v)});render();if(v==='limbo')loadLimbo()}window.changeView=changeView;
+function changeView(v){
+ if(!profile)return;
+ if(!profile.gestor&&['fabric','status','approval','limbo'].includes(v))return;
+ view=v;
+ ['fabric','status','roles','kanban','approval','limbo'].forEach(function(x){$('tab-'+x).classList.toggle('active',x===v)});
+ render();
+ if(v==='limbo')loadLimbo();
+ if(v==='kanban'||v==='roles'){
+  carregarStatusOrcamento(true).catch(function(e){
+   setNotice('Falha ao consultar as colunas TST_SERV: '+e.message,'error');
+  });
+ }
+}window.changeView=changeView;
 function sortBy(k){if(sortKey===k)sortAsc=!sortAsc;else {sortKey=k;sortAsc=true}pageIndex=1;render()}window.sortBy=sortBy;
 function advancedToggle(){$('advanced').classList.toggle('open')}window.advancedToggle=advancedToggle;
 function addColumnFilter(){var v=$('columnValue').value.trim();if(v){extraFilters.push({k:$('columnSelect').value,v:v});$('columnValue').value='';render()}}window.addColumnFilter=addColumnFilter;
@@ -1509,7 +1532,7 @@ async function carregarStatusOrcamento(forcar){
     baseRows=baseRows.map(function(r,i){return normalizeItem(r.raw,i)});
     if(historyRows.length)historyRows=historyRows.map(function(r,i){return normalizeItem(r.raw,i)});
     applyPendingVisuals();setupFilters();
-    if(view==='kanban')render();
+    if(view==='kanban'||view==='roles')render();
    }
    return statusOrcamentos
   }catch(e){
