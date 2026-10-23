@@ -346,7 +346,34 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .limbo-table td:nth-child(4){min-width:240px;white-space:normal}
 .limbo-flag{display:inline-block;color:#9d6417;background:#fff2d8;padding:4px 8px;border-radius:7px;font-weight:800;font-size:11px}
 .limbo-hint{margin-top:6px;font-size:11px;color:#687b90}
-</style></head><body>
+</style><style id="kanban-colunas-horizontais">
+/* Cada status é SEMPRE uma coluna na mesma linha: rolagem apenas horizontal. */
+#screen .kanban {
+ display:flex !important;
+ flex-direction:row !important;
+ flex-wrap:nowrap !important;
+ align-items:flex-start !important;
+ gap:12px !important;
+ overflow-x:auto !important;
+ overflow-y:hidden !important;
+ width:100% !important;
+ max-width:100% !important;
+ box-sizing:border-box !important;
+ overscroll-behavior-x:contain;
+ padding:16px !important;
+}
+#screen .kanban > .lane {
+ flex:0 0 265px !important;
+ width:265px !important;
+ min-width:265px !important;
+ max-width:265px !important;
+ box-sizing:border-box !important;
+}
+@media (max-width:620px){
+ #screen .kanban > .lane{flex-basis:235px !important;width:235px !important;min-width:235px !important;max-width:235px !important;}
+}
+</style>
+</head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
 <button class="btn ghost small" id="reloadBtn" onclick="loadAll()">↻ Atualizar</button><button class="btn ghost small" onclick="logout()">Sair</button></div></div></header>
