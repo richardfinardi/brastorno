@@ -799,9 +799,9 @@ var hay=q?normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JS
 if(tokens.some(function(t){var exclude=t[0]==='-';var term=normalize(t.replace(/^[+-]/,'').replace(/^"|"$/g,''));return term&&(exclude?hay.includes(term):!hay.includes(term))}))return false;
 return extraFilters.every(function(f){if(f.k===exceptKey)return true;var val=String(r[f.k]==null?'':r[f.k]);if(f.kind==='dateRange')return !!val&&(!f.from||val>=f.from)&&(!f.to||val<=f.to);if(Array.isArray(f.values))return f.values.includes(val);if(['entry','agreed','forecast','invoicedAt'].includes(f.k))val+=' '+human(r[f.k]);if(f.k==='value')val+=' '+money(r.value);return normalize(val).includes(normalize(f.v))})})}
 function ordenarFiltroPT(a,b){return String(a||'').localeCompare(String(b||''),'pt-BR',{sensitivity:'base',numeric:true})}
-function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</option>'+Array.from(new Set(values)).filter(Boolean).sort().map(function(v){return '<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
+function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</option>'+Array.from(new Set(values)).filter(Boolean).sort(ordenarFiltroPT).map(function(v){return '<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
 function setupFilters(){var vis=visibleRows();['type','status','auto'].forEach(function(k){
- multiOptions[k]=Array.from(new Set(vis.map(function(r){return k==='auto'?r.autoStatus:r[k]}).concat(Array.from(multiSelections[k])))).filter(Boolean).sort(function(a,b){return a.localeCompare(b,'pt-BR')});
+ multiOptions[k]=Array.from(new Set(vis.map(function(r){return k==='auto'?r.autoStatus:r[k]}).concat(Array.from(multiSelections[k])))).filter(Boolean).sort(ordenarFiltroPT);
  renderMulti(k)
 });renderMulti('period')}
 function multiVisible(k){var q=normalize($(k+'Search').value);return multiOptions[k].filter(function(v){return normalize(v).includes(q)}).sort(ordenarFiltroPT)}
@@ -1330,8 +1330,8 @@ function tile(r){return '<article class="task"><div class="task-head"><strong>'+
 function drawRoles(arr){
  // Controle por Status: cada etapa TST_SERV aparece como setor, inclusive novas etapas.
  // Os cartões seguem as liberações do usuário em CSENHA + TST_SERV.U_LIB.
- var colunas=Array.from(new Set(statusOrcamentos.map(function(x){return String(x.nome).trim()}).concat(['SEM OS','FATURADO'])));
- if(!statusOrcCarregados)colunas=STATUS.slice();
+ var colunas=Array.from(new Set(statusOrcamentos.map(function(x){return String(x.nome).trim()}).concat(['SEM OS','FATURADO']))).sort(ordenarFiltroPT);
+ if(!statusOrcCarregados)colunas=STATUS.slice().sort(ordenarFiltroPT);
  var grupos=colunas.map(function(nome){
   var items=sorting(arr.filter(function(r){
    return normalize(r.pending?r.status:(r.cpsStatus||r.status))===normalize(nome)
@@ -1342,7 +1342,7 @@ function drawRoles(arr){
    (items.length>rolesLimit?'<button class="btn small" onclick="moreRoles()">Mostrar mais ('+(items.length-rolesLimit)+')</button>':'')+'</section>'
  }).join('');
  $('screen').innerHTML='<section class="panel"><div class="panel-head"><div><h2>C. Controle por Status</h2><p>Todas as etapas cadastradas na TST_SERV; itens conforme sua permissão.</p></div><span class="tag">'+arr.length+' disponíveis</span></div>'+
- '<div class="role"><div class="field"><label>Setores liberados</label><div class="role-caption">'+(profile.gestor?'TODAS AS ETAPAS':statusOrcamentos.filter(function(x){return liberadosPorStatus.has(Number(x.codigo))}).map(function(x){return esc(x.nome)}).join(' • '))+'</div></div></div>'+
+ '<div class="role"><div class="field"><label>Setores liberados</label><div class="role-caption">'+(profile.gestor?'TODAS AS ETAPAS':statusOrcamentos.filter(function(x){return liberadosPorStatus.has(Number(x.codigo))}).sort(function(a,b){return ordenarFiltroPT(a.nome,b.nome)}).map(function(x){return esc(x.nome)}).join(' • '))+'</div></div></div>'+
  '<div class="role-status-grupos">'+grupos+'</div></section>';
 }
 function moreRoles(){rolesLimit+=100;drawRoles(filtered())}window.moreRoles=moreRoles;
@@ -1357,7 +1357,7 @@ function drawKanban(arr){
  var catalogoColunas=statusOrcamentos.map(function(x){return String(x.nome).trim()});
  var opcoesEtapas=Array.from(new Set(catalogoColunas.concat(['SEM OS','FATURADO']))).sort(ordenarFiltroPT);
  var todasEtapas=opcoesEtapas.filter(function(nome){return !kanbanColunasOcultas.has(nome)});
- if(!statusOrcCarregados)todasEtapas=STATUS.filter(function(nome){return !kanbanColunasOcultas.has(nome)});
+ if(!statusOrcCarregados)todasEtapas=STATUS.filter(function(nome){return !kanbanColunasOcultas.has(nome)}).sort(ordenarFiltroPT);
  var lanes=todasEtapas.map(function(s){
   var items=sorting(visible.filter(function(r){return normalize(r.pending?r.status:(profile.gestor?r.status:(r.cpsStatus||r.status)))===normalize(s)})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
@@ -1385,7 +1385,7 @@ function drawKanban(arr){
 }
 // Portal no BODY: o seletor nunca é cortado pelo painel (overflow:hidden).
 function kanbanEtapasDisponiveis(){
- return Array.from(new Set(statusOrcamentos.map(function(x){return String(x.nome).trim()}).concat(['SEM OS','FATURADO'])));
+ return Array.from(new Set(statusOrcamentos.map(function(x){return String(x.nome).trim()}).concat(['SEM OS','FATURADO']))).sort(ordenarFiltroPT);
 }
 function atualizarPopupColunasKanban(opcoes){
  var popup=document.getElementById('kanbanColunasPopup');
