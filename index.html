@@ -659,7 +659,6 @@ function statusOf(raw){
  var concluida=n===13||origem==='CONCLUIDO'||situacao==='CONCLUIDO'||posicao==='CONCLUIDO'||truthy(read(raw,['os_concluida','concluido']));
  if(situacao==='FATURADO'||origem==='FATURADO'||truthy(read(raw,['faturado_total'])))return 'FATURADO';
  if(origem==='SEM OS')return 'SEM OS';
- if(n===13)return 'CONCLUÍDO'; // Gestor: conclusão oficial tem prioridade sobre faturamento.
  if(concluida&&comOrcamento)return 'FATURAMENTO';
  if(concluida)return 'CONCLUÍDO';
  if(codeStatus[n])return codeStatus[n];
@@ -695,7 +694,7 @@ else if(!situation){
 var situacaoNormalizada=normalize(situation);
 urgent=!isDone&&(situacaoNormalizada.includes('ATRASAD')||situacaoNormalizada.includes('VENCID')||situacaoNormalizada.includes('AVISAR AO COMERCIAL')||situacaoNormalizada.includes('PREVISAO ACIMA DO ACORDADO'));
 var id=String(read(raw,['guid_linha','id','codigo_item','cod_os','codigo'])||'')+'|'+os+'|'+quote+'|'+i;
-return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:obsPlain(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
+return {id:id,raw:raw,type:String(read(raw,['classificacao','tipo','tipo_servico'])||'—'),client:String(read(raw,['cliente','nome_cliente','razao_social'])||'—'),quote:quote,os:os,product:String(read(raw,['titulo','descricao','produto','item','descricao_item'])||'—'),qty:read(raw,['qtde','quantidade','qtd']),entry:entry,agreed:agreed,forecast:forecast,value:read(raw,['valor','valor_total','valor_projeto','preco_geral_a_vista','vl_total']),cpsStatus:noOS?status:(codeStatus[Number(read(raw,['cod_status','status_codigo','codigo_status']))]||String(read(raw,['status_servico','status'])||status)),status:status,situation:situation,urgent:urgent,month:forecast?forecast.slice(5,7):'',year:forecast?forecast.slice(0,4):'',obs:obsPlain(read(raw,['obs','observacao','observacoes','obs_texto_limpo'])||''),invoice:invoice,invoicedAt:date(read(raw,['dt_emissao','dt_faturamento','data_faturamento','dt_nf'])),noOS:noOS,done:isDone}}
 function visibleRows(){return rows.filter(function(r){return profile.gestor||profile.roles.includes(r.status)||(r.pending&&profile.roles.includes(r.previousStatus))})}
 function filtered(exceptKey){var q=normalize($('q').value),type=multiSelections.type,status=multiSelections.status,per=multiSelections.period,releaseFrom=$('releaseFrom').value,releaseTo=$('releaseTo').value,tokens=q.match(/(?:[+-]?"[^"]+"|[+-]?\S+)/g)||[];
 return visibleRows().filter(function(r){if(type.size&&!type.has(r.type))return false;if(status.size&&!status.has(r.status))return false;if(multiSelections.auto.size&&!multiSelections.auto.has(r.autoStatus))return false;
@@ -814,7 +813,7 @@ function cell(r,k){
  if(k==='forecast')return '<span class="tag '+(r.urgent?'bad':'')+'">'+esc(human(v))+(r.urgent?' · Atenção':'')+'</span>';
  if(['agreed','entry','invoicedAt'].includes(k))return esc(human(v));
  if(k==='value')return money(v);
- if(k==='status')return label(v,r);
+ if(k==='status'){var cps=r.cpsStatus||v;return '<span class="pill '+group(cps)+'" title="Status oficial do CPS; etapa operacional pode continuar como aguardando faturamento">'+esc(cps)+'</span>'}
   if(k==='autoStatus')return '<span class="auto-status-cell '+(!v||v==='—'?'empty':'')+'" title="Indicador calculado: não altera o status oficial do CPS">'+esc(v||'—')+'</span>';
   if(k==='autoDetail')return '<span class="auto-detail-cell" title="'+esc(v||'')+'">'+esc(v||'—')+'</span>';
  if(k==='situation')return '<span class="why-label"'+whyTitle(situationReason(r))+'>'+badge(v,r.urgent?'bad':'')+'</span>';
@@ -1441,7 +1440,7 @@ function toggleFilters(force){
  var btn=$('toggleFiltersBtn');if(btn)btn.textContent=filtersCollapsed?'▾ Mostrar filtros':'▴ Recolher filtros';
  try{localStorage.setItem('brastorno_filtros_recolhidos',filtersCollapsed?'1':'0')}catch(e){}
 }window.toggleFilters=toggleFilters;
-function exportCSV(){var arr=filtered(),matrix=[FIELDS.map(function(f){return f[1]})].concat(arr.map(function(r){return FIELDS.map(function(f){return f[0]==='situation'?r.situation:r[f[0]]||''})}));var csv='\ufeff'+matrix.map(function(a){return a.map(function(x){return '"'+String(x).replace(/"/g,'""')+'"'}).join(';')}).join('\r\n');
+function exportCSV(){var arr=filtered(),matrix=[FIELDS.map(function(f){return f[1]})].concat(arr.map(function(r){return FIELDS.map(function(f){return f[0]==='situation'?r.situation:f[0]==='status'?(r.cpsStatus||r.status):(r[f[0]]||'')})}));var csv='\ufeff'+matrix.map(function(a){return a.map(function(x){return '"'+String(x).replace(/"/g,'""')+'"'}).join(';')}).join('\r\n');
 var a=document.createElement('a'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.href=url;a.download='brastorno_controle_fabrica.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url)},1000)}window.exportCSV=exportCSV;
 
 
