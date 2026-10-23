@@ -121,6 +121,34 @@
                 btnLogin.textContent = 'Entrar no Sistema';
             }
         }
+        // Apresentacao em texto puro: sem acento ou cedilha, sem tocar nos valores.
+        function textoPuroVisual(valor) {
+            return String(valor).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        }
+        function converterTextoVisivel(raiz) {
+            if (!raiz) return;
+            if (raiz.nodeType === Node.TEXT_NODE) {
+                const pai=raiz.parentElement;
+                if (!pai || pai.closest('script,style,textarea,code,pre')) return;
+                const v=textoPuroVisual(raiz.nodeValue);
+                if (v!==raiz.nodeValue) raiz.nodeValue=v;
+                return;
+            }
+            if (raiz.nodeType !== Node.ELEMENT_NODE) return;
+            const walker=document.createTreeWalker(raiz,NodeFilter.SHOW_TEXT);
+            let no;
+            while((no=walker.nextNode()))converterTextoVisivel(no);
+            [raiz,...raiz.querySelectorAll('[title],[placeholder],[aria-label]')].forEach(el=>{
+                ['title','placeholder','aria-label'].forEach(chave=>{
+                    if(el.hasAttribute(chave))el.setAttribute(chave,textoPuroVisual(el.getAttribute(chave)));
+                });
+            });
+        }
+        new MutationObserver(mudancas=>mudancas.forEach(m=>{
+            if(m.type==='characterData')converterTextoVisivel(m.target);
+            else m.addedNodes.forEach(converterTextoVisivel);
+        })).observe(document.body,{subtree:true,childList:true,characterData:true});
+        converterTextoVisivel(document.body);
     </script>
 </body>
 </html>
