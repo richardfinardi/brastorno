@@ -659,6 +659,7 @@ function statusOf(raw){
  var concluida=n===13||origem==='CONCLUIDO'||situacao==='CONCLUIDO'||posicao==='CONCLUIDO'||truthy(read(raw,['os_concluida','concluido']));
  if(situacao==='FATURADO'||origem==='FATURADO'||truthy(read(raw,['faturado_total'])))return 'FATURADO';
  if(origem==='SEM OS')return 'SEM OS';
+ if(n===13)return 'CONCLUÍDO'; // Gestor: conclusão oficial tem prioridade sobre faturamento.
  if(concluida&&comOrcamento)return 'FATURAMENTO';
  if(concluida)return 'CONCLUÍDO';
  if(codeStatus[n])return codeStatus[n];
@@ -672,7 +673,7 @@ function statusOf(raw){
  if(x.includes('EXPED'))return 'EXPEDIÇÃO';
  if(x.includes('PARALIS'))return 'PARALISADO';
  if(x.includes('CANCEL'))return 'CANCELADO';
- return 'SEM STATUS'
+ return String(read(raw,['status_servico','status','status_os'])||'SEM STATUS').trim()||'SEM STATUS'
 }
 function normalizeItem(raw,i){var status=statusOf(raw),os=String(read(raw,['n_os','os','numero_os','ordem_servico'])||'').trim();
 var quote=String(read(raw,['n_orcamento','orcamento','numero_orcamento'])||'').trim(),invoice=String(read(raw,['numero_nf','n_nf','nf','nota_fiscal'])||'').trim();
@@ -1493,14 +1494,16 @@ async function carregarStatusOrcamento(forcar){
 }
 function statusOrcHtml(){
  return '<option value="">Não alterar o status</option>'+
-  statusOrcamentos.map(function(x){return '<option value="'+esc(x.nome)+'">'+esc(x.nome)+'</option>'}).join('')
+  statusOrcamentos.map(function(x){return '<option value="'+esc(x.codigo)+'">'+esc(x.nome)+' ('+esc(x.codigo)+')</option>'}).join('')
 }
 function atualizarSelectStatusOrc(){
- var el=$('editStatusOrc');if(!el)return;
- var antigo=el.value;
- el.innerHTML=statusOrcHtml();
- if(antigo&&Array.from(el.options).some(function(o){return o.value===antigo}))el.value=antigo;
- el.disabled=!statusOrcCarregados;
+ ['editStatusOrc','editStatusCps'].forEach(function(nome){
+  var el=$(nome);if(!el)return;
+  var antigo=el.value;
+  el.innerHTML=statusOrcHtml();
+  if(antigo&&Array.from(el.options).some(function(o){return o.value===antigo}))el.value=antigo;
+  el.disabled=!statusOrcCarregados;
+ });
 }
 function montarOpcoesTipo(r){
  var options=catalogoTipos.filter(function(t){return t.codigo_orcamento!==null&&t.codigo_orcamento!==undefined});
@@ -1539,7 +1542,7 @@ function openModal(id,focusField){
    edit='<div class="edit-section"><h3>'+esc(isOS?'Alterar serviço':'Alterar orçamento')+'</h3>'+
    '<div class="cols">'+
    '<div class="field"><label for="editType">Tipo / Classificação</label><select id="editType" '+(!tiposCarregados?'disabled':'')+'>'+montarOpcoesTipo(r)+'</select><small class="field-help">Atual: '+esc(r.type||'—')+' • '+'Cadastro de itens • Empresa 1'+'</small></div>'+
-   (isOS?'<div class="field"><label for="editForecast">Previsão de liberação</label><input id="editForecast" type="date" value="'+esc(r.forecast||'')+'"></div>':'<div class="field"><label for="editStatusOrc">Status do item (TST_SERV)</label><select id="editStatusOrc" '+(!statusOrcCarregados?'disabled':'')+'>'+statusOrcHtml()+'</select><small class="field-help">Atual: '+esc(r.status)+' • Gravado em TORCAMENTO_ITENS.STRING1</small></div>')+'</div>'+
+   (isOS?'<div class="field"><label for="editForecast">Previsão de liberação</label><input id="editForecast" type="date" value="'+esc(r.forecast||'')+'"></div><div class="field"><label for="editStatusCps">Status CPS (TST_SERV)</label><select id="editStatusCps" '+(!statusOrcCarregados?'disabled':'')+'>'+statusOrcHtml()+'</select><small class="field-help">Status oficial: '+esc(read(r.raw,['status_servico'])||r.status)+' • Alteração direta pelo gestor.</small></div>':'<div class="field"><label for="editStatusOrc">Status do item (TST_SERV)</label><select id="editStatusOrc" '+(!statusOrcCarregados?'disabled':'')+'>'+statusOrcHtml()+'</select><small class="field-help">Atual: '+esc(r.status)+' • Gravado em TORCAMENTO_ITENS.STRING1</small></div>')+'</div>'+
    '<div class="field" style="margin-top:12px"><label for="editObservation">Observação'+(isOS?' / motivo da alteração de data':'')+'</label><textarea id="editObservation" maxlength="10000" placeholder="'+(isOS?'Obrigatória quando alterar a previsão de liberação':'Adicionar ao histórico sem apagar as observações anteriores')+'"></textarea></div>'+
    '<small style="display:block;margin-top:8px;color:#738198">Cada alteração é registrada com usuário, data e hora.</small>'+ 
    '<div class="edit-save-actions">'+(isOS&&r.status==='FATURAMENTO'?'<button type="button" class="btn" onclick="concluirForcadoSelecionado()">Concluir mesmo aguardando faturamento</button>':'')+'<button type="button" id="btnSaveModal" class="btn primary" onclick="saveModal()">Salvar alterações</button></div>'+
@@ -1553,7 +1556,7 @@ function openModal(id,focusField){
  compact+edit+logs+'<section class="edit-section obs-service-data"><h3>Dados do servico</h3>'+values+'</section>';
  $('overlay').classList.add('show');
  if(canEdit&&!tiposCarregados)carregarTipos();
- if(canEdit&&!isOS&&!statusOrcCarregados)carregarStatusOrcamento();
+ if(canEdit)carregarStatusOrcamento(true).catch(function(e){setNotice('Falha ao consultar TST_SERV: '+e.message,'error')});
  if(focusField&&canEdit){var target=$(focusField==='type'?'editType':'editForecast');if(target)target.focus()}
  }window.openModal=openModal;
 function rawPatch(raw,aliases,value){
@@ -1599,18 +1602,18 @@ async function saveModal(){
  if(choice&&!item){alert('Tipo inválido. Aguarde a atualização do cadastro.');return}
  var typeNew=item?item.descricao:null,
      newDate=profile.gestor&&isOS&&$('editForecast')?$('editForecast').value||null:null,
-     newStatus=profile.gestor&&!isOS&&$('editStatusOrc')?$('editStatusOrc').value:'',
+     newStatus=profile.gestor&&$(isOS?'editStatusCps':'editStatusOrc')?$(isOS?'editStatusCps':'editStatusOrc').value:'',
      note=$('editObservation')?obsPlain($('editObservation').value):'';
  var changes=[];
  var changedDate=isOS&&profile.gestor&&(newDate||'')!==(r.forecast||'');
  if(changedDate&&!note){alert('Para alterar a previsão de liberação, informe uma observação.');$('editObservation')?.focus();return}
- if(item)changes.push(['tipo',{
+ if(item)changes.push(['tipo_corrigido',{
    cod_classificacao:item.codigo_orcamento,
    origem:'orcamento',
    classificacao:typeNew
  },'PATCH','type']);
  if(changedDate)changes.push(['previsao',{u_prev_lib:newDate,observacao:note},'PATCH','forecast']);
- if(!isOS&&newStatus&&normalize(newStatus)!==normalize(r.status))changes.push(['status',{status_novo:newStatus},'PATCH','status']);
+ if(newStatus)changes.push(['status_direto',{status_novo:newStatus},'PATCH','status']);
  if(note&&!changedDate)changes.push(['observacoes',{texto:note},'POST','note']);
  if(!changes.length){closeModal();return}
  var btn=$('btnSaveModal');btn.disabled=true;btn.textContent='Salvando…';
@@ -1622,18 +1625,19 @@ async function saveModal(){
       headers:{'Content-Type':'application/json'},body:JSON.stringify(c[1])});
    if(!isOS){
      if(c[3]==='type')patchLocalOrc(guid,response.classificacao||typeNew);
-     if(c[3]==='status')patchLocalOrcData(guid,['status','status_item'],response.status_novo||newStatus);
+     if(c[3]==='status'){var statusEsperado=statusOrcamentos.find(function(x){return String(x.codigo)===String(newStatus)});if(!statusEsperado||normalize(response.status_novo)!==normalize(statusEsperado.nome))throw Error('Status não confirmado no CPS.');patchLocalOrcData(guid,['status','status_item'],response.status_novo)}
      if(c[3]==='note'&&typeof response.obs==='string')patchLocalOrcData(guid,['observacoes','obs'],response.obs);
    }else{
      var patch={};
-     if(c[3]==='type')patch.type=response.classificacao||typeNew;
+     if(c[3]==='type'){if(normalize(response.classificacao)!==normalize(typeNew))throw Error('Tipo não confirmado no CPS.');patch.type=response.classificacao||typeNew;}
+     if(c[3]==='status'){var esperadoStatus=statusOrcamentos.find(function(x){return String(x.codigo)===String(newStatus)});if(!esperadoStatus||normalize(response.status_servico)!==normalize(esperadoStatus.nome))throw Error('Status não confirmado no CPS.');}
      if(c[3]==='forecast')patch.forecast=newDate||'';
      if(response&&typeof response.obs==='string')patch.obs=response.obs;
      patchLocalOS(code,patch)
    }
   }
   closeModal();setNotice('Alteração salva.','ok');
-  setTimeout(function(){loadData({force:true})},1200)
+  setTimeout(function(){if(showHistory){historyLoaded=false;historyRows=[];}loadData({force:true}).then(function(){if(showHistory)toggleHistory(true)}).catch(function(e){setNotice(e.message,'error')})},200)
  }catch(err){setNotice('Não foi possível salvar: '+err.message,'error')}
  finally{btn.disabled=false;btn.textContent='Salvar alterações'}
 }
