@@ -373,6 +373,11 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
  #screen .kanban > .lane{flex-basis:235px !important;width:235px !important;min-width:235px !important;max-width:235px !important;}
 }
 </style>
+<style id="aprovacao-justificativa-visual">
+.approval-justificativa{margin:12px 0 4px;padding:13px 15px;border-radius:10px;background:#fff6e6;border:1px solid #e8b85a;border-left:5px solid #b97913;color:#69440e}
+.approval-justificativa strong{display:block;font-size:11px;letter-spacing:.045em;margin-bottom:7px}
+.approval-justificativa p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5;font-weight:650}
+</style>
 </head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -1422,6 +1427,14 @@ function approvalDetails(req,byCod,byOS){
  if(req.guid_linha&&byCod.byGuid)return byCod.byGuid.get(String(req.cod_empresa||'1')+':'+String(req.guid_linha).toUpperCase())||null;
  return byCod.get(code)||byOS.get(number)||null
 }
+function justificativaPendencia(req){
+ var historico=String(req.observacao||'').trim();
+ if(!historico)return '';
+ // Pega a justificativa mais recente sem exibir logs técnicos da fila.
+ var trechos=[...historico.matchAll(/(?:justificativa\s*:|justificar movimentação\s*:)([^\n\r]*)/gi)];
+ if(trechos.length)return trechos[trechos.length-1][1].trim();
+ return historico.replace(/^\[[^\]]+\]\s*/,'').trim();
+}
 function approvalCard(req,row){
  var id=String(req.id||req.codigo||''),isQuote=!!req.guid_linha,os=isQuote?(row&&row.quote||'ORC '+req.cod_orcamento):(req.n_os||req.os||row&&row.os||'OS'),
  origin=req.status_anterior||req.origem||'—',dest=req.status_novo||req.destino||'—',
@@ -1429,12 +1442,13 @@ function approvalCard(req,row){
  desc=row?row.product:String(req.titulo||req.descricao||'Descrição indisponível'),
  client=row?row.client:String(req.cliente||'—'),qty=row?row.qty:null,
  type=row?row.type:null,deadline=row?human(row.forecast):null;
+ var justificativa=justificativaPendencia(req);
  var checked=selectedApprovalIds.has(id)?' checked':'',dlink=row?'<button class="btn small" onclick="openModal('+JSON.stringify(row.id).replace(/"/g,'&quot;')+')">Detalhes</button>':'';
  return '<article class="approval-card"><div class="approval-top">'+
   '<label class="approval-select"><input type="checkbox" data-id="'+esc(id)+'" onchange="toggleApprovalPick(this)"'+checked+'><strong>'+esc(isQuote?'Orçamento '+os:'OS '+os)+'</strong></label>'+
   '<span class="pending-badge">'+esc(origin)+' → '+esc(dest)+'</span></div>'+
   '<div class="approval-content"><h3 title="'+esc(desc)+'">'+esc(desc)+'</h3><div class="approval-client" title="'+esc(client)+'">'+esc(client)+'</div>'+
-  '<div class="approval-meta">'+(type&&type!=='—'?'<span>Tipo: '+esc(type)+'</span>':'')+
+  '<div class="approval-justificativa" '+(!justificativa?'style="display:none"':'')+'><strong>JUSTIFICATIVA DA MOVIMENTAÇÃO</strong><p>'+esc(justificativa)+'</p></div><div class="approval-meta">'+(type&&type!=='—'?'<span>Tipo: '+esc(type)+'</span>':'')+
   (qty!==null&&qty!==undefined&&qty!==''?'<span>Qtde: '+esc(qty)+'</span>':'')+
   (deadline&&deadline!=='—'?'<span>Liberação: '+esc(deadline)+'</span>':'')+'</div></div>'+
   '<div class="approval-foot"><span>Solicitado por <b>'+esc(author)+'</b><br><small>'+esc(new Date(at).toLocaleString('pt-BR')==='Invalid Date'?at:new Date(at).toLocaleString('pt-BR'))+'</small></span>'+
