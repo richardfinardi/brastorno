@@ -378,6 +378,15 @@ body{min-height:100vh}.wrap{max-width:1600px}.hidden{display:none!important}
 .approval-justificativa strong{display:block;font-size:11px;letter-spacing:.045em;margin-bottom:7px}
 .approval-justificativa p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5;font-weight:650}
 </style>
+<style id="brastorno-filtro-kanban">
+.kanban-colunas-filtro{position:relative;display:inline-block;z-index:25}
+.kanban-colunas-filtro summary{cursor:pointer;list-style:none;white-space:nowrap}
+.kanban-colunas-filtro summary::-webkit-details-marker{display:none}
+.kanban-colunas-menu{position:absolute;right:0;top:calc(100% + 7px);background:#fff;border:1px solid #dce4ee;border-radius:12px;box-shadow:0 12px 28px #172b4c24;min-width:255px;max-height:65vh;overflow:auto;padding:10px;z-index:40}
+.kanban-colunas-menu label{display:flex;align-items:center;gap:9px;padding:8px 6px;font-size:12px;color:#182b46;cursor:pointer}
+.kanban-colunas-menu input{accent-color:#718d35}
+.kanban-colunas-acoes{display:flex;gap:6px;padding:2px 0 8px;border-bottom:1px solid #e5eaf0;margin-bottom:5px}
+</style>
 </head><body>
 <header><div class="head"><div class="brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno" width="178" height="62"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>Controle de Fábrica</strong><small>Gestão de serviços e produção</small></div><span class="brand-divider desktop-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF" width="190" height="27"></div>
 <div class="head-right"><span class="demo-pill" id="profileLabel">AUTENTICANDO</span><span id="userName" style="font-size:12px;font-weight:800"></span>
@@ -434,6 +443,22 @@ var uLibPorStatus=new Map(),liberadosPorStatus=new Set();
 var baseRows=[],historyRows=[],historyLoaded=false,showHistory=false,historyLoading=null,pendingRequests=[],pageIndex=1,pageSize=100,rolesLimit=100,laneLimits={},columnFilterTimer=null,filtersCollapsed=false,readCache=new WeakMap();
 var multiSelections={type:new Set(),status:new Set(),auto:new Set(),period:new Set()},multiOptions={type:[],status:[],auto:[],period:["Vencidos / urgentes","Próximos 30 dias","Orçamentos sem OS","Concluídos"]};
 var kanbanPendingOnly=false;
+var kanbanColunasOcultas=new Set();
+try { kanbanColunasOcultas=new Set(JSON.parse(localStorage.getItem('brastorno_kanban_colunas_ocultas')||'[]')); }catch(e){}
+function alternarColunaKanban(nome,ativo){
+ if(ativo)kanbanColunasOcultas.delete(nome);else kanbanColunasOcultas.add(nome);
+ try{localStorage.setItem('brastorno_kanban_colunas_ocultas',JSON.stringify(Array.from(kanbanColunasOcultas)))}catch(e){}
+ drawKanban(filtered());
+}
+window.alternarColunaKanban=alternarColunaKanban;
+function todasColunasKanban(ativar){
+ (statusOrcamentos.map(function(x){return String(x.nome).trim()}).concat(['SEM OS','FATURADO'])).forEach(function(nome){
+  if(ativar)kanbanColunasOcultas.delete(nome);else kanbanColunasOcultas.add(nome);
+ });
+ try{localStorage.setItem('brastorno_kanban_colunas_ocultas',JSON.stringify(Array.from(kanbanColunasOcultas)))}catch(e){}
+ drawKanban(filtered())
+}
+window.todasColunasKanban=todasColunasKanban;
 // Dados derivados, exclusivamente informativos. Nunca participam das alteracoes de status do CPS.
 var autoStatuses=new Map(),autoDetails=new Map(),autoBusy=false,autoLoaded=false,autoError='';
 var rows=[],view='fabric',profile=null,selected=null,sortKey='forecast',sortAsc=true,extraFilters=[],pending=[],dragging=null,kanbanScrollFrame=0,kanbanScrollSpeed=0;
@@ -1300,8 +1325,9 @@ function drawKanban(arr){
  // Todas as colunas TST_SERV visíveis para qualquer usuário.
  // Apenas os CARTÕES são filtrados conforme o U_LIB do status atual.
  var catalogoColunas=statusOrcamentos.map(function(x){return String(x.nome).trim()});
- var todasEtapas=Array.from(new Set(catalogoColunas.concat(['SEM OS','FATURADO'])));
- if(!statusOrcCarregados)todasEtapas=STATUS.slice();
+ var opcoesEtapas=Array.from(new Set(catalogoColunas.concat(['SEM OS','FATURADO'])));
+ var todasEtapas=opcoesEtapas.filter(function(nome){return !kanbanColunasOcultas.has(nome)});
+ if(!statusOrcCarregados)todasEtapas=STATUS.filter(function(nome){return !kanbanColunasOcultas.has(nome)});
  var lanes=todasEtapas.map(function(s){
   var items=sorting(visible.filter(function(r){return normalize(r.pending?r.status:(profile.gestor?r.status:(r.cpsStatus||r.status)))===normalize(s)})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
@@ -1318,9 +1344,13 @@ function drawKanban(arr){
    '<div class="lane-head"><span>'+esc(s==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':s)+'</span><span class="lane-count">'+items.length+'</span></div>'+
    (cards||'<div class="empty">Sem cartões</div>')+extra+'</section>'
  }).join('');
+ var colunasFiltro='<details class="kanban-colunas-filtro"><summary class="btn small">☷ Colunas ('+todasEtapas.length+'/'+opcoesEtapas.length+')</summary>'+
+  '<div class="kanban-colunas-menu"><div class="kanban-colunas-acoes"><button class="btn small" onclick="event.preventDefault();todasColunasKanban(true)">Marcar todas</button><button class="btn small" onclick="event.preventDefault();todasColunasKanban(false)">Desmarcar todas</button></div>'+
+  opcoesEtapas.map(function(nome){return '<label><input type="checkbox" '+(!kanbanColunasOcultas.has(nome)?'checked ':'')+'onchange="alternarColunaKanban('+JSON.stringify(nome).replace(/"/g,'&quot;')+',this.checked)"><span>'+esc(nome)+'</span></label>'}).join('')+
+  '</div></details>';
  var button='<button class="btn small kanban-pending-toggle '+(kanbanPendingOnly?'active':'')+'" aria-pressed="'+(kanbanPendingOnly?'true':'false')+'" onclick="toggleKanbanPending()">'+(kanbanPendingOnly?'☑':'☐')+' Somente pendentes</button>';
  $('screen').innerHTML='<section class="panel"><div class="panel-head kanban-head"><div><h2>Gestão visual em cartões</h2></div><div class="panel-actions">'+
-  '<span class="tag kanban-pending-count">'+pendingCount+' aguardando aprovação</span>'+button+
+  '<span class="tag kanban-pending-count">'+pendingCount+' aguardando aprovação</span>'+colunasFiltro+button+
   '<span class="tag">'+visible.length+' cartões</span></div></div>'+
   '<div class="kanban" ondragover="kanbanDragOver(event)" ondragleave="if(!event.currentTarget.contains(event.relatedTarget))stopKanbanScroll()">'+lanes+'</div></section>';
  var next=$('screen').querySelector('.kanban');if(next){next.scrollLeft=savedLeft;next.scrollTop=savedTop}
