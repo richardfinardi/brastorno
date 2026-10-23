@@ -1292,16 +1292,11 @@ function drawKanban(arr){
  var previous=$('screen').querySelector('.kanban'),savedLeft=previous?previous.scrollLeft:0,savedTop=previous?previous.scrollTop:0;
  // Cada registro TST_SERV gera uma coluna, INDEPENDENTEMENTE de haver cartões.
  // O gestor enxerga TODOS; demais usuários apenas as etapas com U_LIB liberado.
- var catalogoColunas=statusOrcamentos.filter(function(x){
-  return profile.gestor||liberadosPorStatus.has(Number(x.codigo))
- }).map(function(x){return String(x.nome).trim()});
- var todasEtapas=Array.from(new Set(catalogoColunas.concat(
-   profile.gestor?['SEM OS','FATURADO']:[]
- )));
- // Se a API ainda estiver carregando, preserva as etapas padrão sem esconder as novas.
- if(!statusOrcCarregados){
-  todasEtapas=profile.gestor?STATUS.slice():[];
- }
+ // Todas as colunas TST_SERV visíveis para qualquer usuário.
+ // Apenas os CARTÕES são filtrados conforme o U_LIB do status atual.
+ var catalogoColunas=statusOrcamentos.map(function(x){return String(x.nome).trim()});
+ var todasEtapas=Array.from(new Set(catalogoColunas.concat(['SEM OS','FATURADO'])));
+ if(!statusOrcCarregados)todasEtapas=STATUS.slice();
  var lanes=todasEtapas.map(function(s){
   var items=sorting(visible.filter(function(r){return normalize(profile.gestor?r.status:(r.cpsStatus||r.status))===normalize(s)})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
