@@ -1298,7 +1298,7 @@ function drawKanban(arr){
  var todasEtapas=Array.from(new Set(catalogoColunas.concat(['SEM OS','FATURADO'])));
  if(!statusOrcCarregados)todasEtapas=STATUS.slice();
  var lanes=todasEtapas.map(function(s){
-  var items=sorting(visible.filter(function(r){return normalize(profile.gestor?r.status:(r.cpsStatus||r.status))===normalize(s)})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
+  var items=sorting(visible.filter(function(r){return normalize(r.pending?r.status:(profile.gestor?r.status:(r.cpsStatus||r.status)))===normalize(s)})),limit=laneLimits[s]||45,shown=items.slice(0,limit);
   var cards=shown.map(function(r){
    return '<div class="mini-card '+(r.urgent?'overdue ':'')+(r.pending?'pending-card':'')+'" onclick="openModal('+JSON.stringify(r.id).replace(/"/g,'&quot;')+')">'+
    '<div class="card-top"><strong>'+esc(r.os||r.quote||'Sem OS')+' '+plainLabel(r.status)+'</strong>'+
