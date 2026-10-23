@@ -798,12 +798,13 @@ if(releaseTo&&(!r.forecast||r.forecast>releaseTo))return false;
 var hay=q?normalize(FIELDS.map(function(f){return r[f[0]]||''}).join(' ')+' '+JSON.stringify(r.raw)):'';
 if(tokens.some(function(t){var exclude=t[0]==='-';var term=normalize(t.replace(/^[+-]/,'').replace(/^"|"$/g,''));return term&&(exclude?hay.includes(term):!hay.includes(term))}))return false;
 return extraFilters.every(function(f){if(f.k===exceptKey)return true;var val=String(r[f.k]==null?'':r[f.k]);if(f.kind==='dateRange')return !!val&&(!f.from||val>=f.from)&&(!f.to||val<=f.to);if(Array.isArray(f.values))return f.values.includes(val);if(['entry','agreed','forecast','invoicedAt'].includes(f.k))val+=' '+human(r[f.k]);if(f.k==='value')val+=' '+money(r.value);return normalize(val).includes(normalize(f.v))})})}
+function ordenarFiltroPT(a,b){return String(a||'').localeCompare(String(b||''),'pt-BR',{sensitivity:'base',numeric:true})}
 function setSelect(id,values,current){$(id).innerHTML='<option value="">Todos</option>'+Array.from(new Set(values)).filter(Boolean).sort().map(function(v){return '<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
 function setupFilters(){var vis=visibleRows();['type','status','auto'].forEach(function(k){
  multiOptions[k]=Array.from(new Set(vis.map(function(r){return k==='auto'?r.autoStatus:r[k]}).concat(Array.from(multiSelections[k])))).filter(Boolean).sort(function(a,b){return a.localeCompare(b,'pt-BR')});
  renderMulti(k)
 });renderMulti('period')}
-function multiVisible(k){var q=normalize($(k+'Search').value);return multiOptions[k].filter(function(v){return normalize(v).includes(q)})}
+function multiVisible(k){var q=normalize($(k+'Search').value);return multiOptions[k].filter(function(v){return normalize(v).includes(q)}).sort(ordenarFiltroPT)}
 function renderMulti(k){
  var chosen=multiSelections[k],vals=multiVisible(k),selected=Array.from(chosen);
  $(k+'Filter').innerHTML=esc(selected.length===0?'Todos':selected.length===1&&selected[0]==='FATURAMENTO'?'AGUARDANDO FATURAMENTO':selected.length===1?selected[0]:selected.length+' selecionados')+' <span>▾</span>';
@@ -1009,7 +1010,7 @@ function renderBulkTypes(){
  var field=$('bulkType');if(!field)return;
  var allowed=catalogoTipos.filter(function(item){
   return item.codigo_orcamento!==null&&item.codigo_orcamento!==undefined;
- });
+ }).sort(function(a,b){return ordenarFiltroPT(a.descricao,b.descricao)});
  field.innerHTML='<option value="">Não alterar o tipo</option>'+
   allowed.map(function(item){return '<option value="'+esc(normalize(item.descricao))+'">'+esc(item.descricao)+'</option>'}).join('');
  field.disabled=!tiposCarregados||bulkBusy;
@@ -1038,7 +1039,7 @@ async function openBulk(){
  renderBulkTypes();
  if(pedidos[1].status==='fulfilled'){
   $('bulkStatus').innerHTML='<option value="">Não alterar o status</option>'+
-   statusOrcamentos.map(function(x){return '<option value="'+esc(x.codigo)+'">'+esc(x.nome)+' ('+esc(x.codigo)+')</option>'}).join('');
+   statusOrcamentos.slice().sort(function(a,b){return ordenarFiltroPT(a.nome,b.nome)}).map(function(x){return '<option value="'+esc(x.codigo)+'">'+esc(x.nome)+' ('+esc(x.codigo)+')</option>'}).join('');
   $('bulkStatus').disabled=false;
   $('bulkStatusHint').textContent='Todos os status de TST_SERV (empresa 1), inclusive os recém-cadastrados.';
  }else{
@@ -1354,7 +1355,7 @@ function drawKanban(arr){
  // Todas as colunas TST_SERV visíveis para qualquer usuário.
  // Apenas os CARTÕES são filtrados conforme o U_LIB do status atual.
  var catalogoColunas=statusOrcamentos.map(function(x){return String(x.nome).trim()});
- var opcoesEtapas=Array.from(new Set(catalogoColunas.concat(['SEM OS','FATURADO'])));
+ var opcoesEtapas=Array.from(new Set(catalogoColunas.concat(['SEM OS','FATURADO']))).sort(ordenarFiltroPT);
  var todasEtapas=opcoesEtapas.filter(function(nome){return !kanbanColunasOcultas.has(nome)});
  if(!statusOrcCarregados)todasEtapas=STATUS.filter(function(nome){return !kanbanColunasOcultas.has(nome)});
  var lanes=todasEtapas.map(function(s){
@@ -1396,6 +1397,7 @@ function atualizarPopupColunasKanban(opcoes){
   popup.setAttribute('aria-label','Selecionar colunas do Kanban');
   document.body.appendChild(popup);
  }
+ opcoes=opcoes.slice().sort(ordenarFiltroPT);
  var marcadas=opcoes.filter(function(nome){return !kanbanColunasOcultas.has(nome)}).length;
  popup.innerHTML='<label class="kanban-colunas-todas"><input id="kanbanSelecionarTudo" type="checkbox" '+(marcadas===opcoes.length?'checked ':'')+' onchange="todasColunasKanban(this.checked)"><strong>Selecionar tudo</strong><span>'+marcadas+'/'+opcoes.length+'</span></label>'+
   '<div class="kanban-colunas-itens">'+opcoes.map(function(nome){
@@ -1696,7 +1698,7 @@ async function carregarStatusOrcamento(forcar){
 }
 function statusOrcHtml(){
  return '<option value="">Não alterar o status</option>'+
-  statusOrcamentos.map(function(x){return '<option value="'+esc(x.codigo)+'">'+esc(x.nome)+' ('+esc(x.codigo)+')</option>'}).join('')
+  statusOrcamentos.slice().sort(function(a,b){return ordenarFiltroPT(a.nome,b.nome)}).map(function(x){return '<option value="'+esc(x.codigo)+'">'+esc(x.nome)+' ('+esc(x.codigo)+')</option>'}).join('')
 }
 function atualizarSelectStatusOrc(){
  ['editStatusOrc','editStatusCps'].forEach(function(nome){
@@ -1708,7 +1710,7 @@ function atualizarSelectStatusOrc(){
  });
 }
 function montarOpcoesTipo(r){
- var options=catalogoTipos.filter(function(t){return t.codigo_orcamento!==null&&t.codigo_orcamento!==undefined});
+ var options=catalogoTipos.filter(function(t){return t.codigo_orcamento!==null&&t.codigo_orcamento!==undefined}).sort(function(a,b){return ordenarFiltroPT(a.descricao,b.descricao)});
  var html='<option value="">Sem alteração no tipo</option>';
  html+=options.map(function(t){
    return '<option value="'+esc('orcamento:'+t.codigo_orcamento)+'">'+esc(t.descricao)+'</option>'
