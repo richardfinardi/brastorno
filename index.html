@@ -991,7 +991,7 @@ async function applyBulk(){
      var tipoUrl=code!==null?'/controle_fabrica/os/'+code+'/tipo_corrigido':
        '/controle_fabrica/orcamento_item/'+encodeURIComponent(guid)+'/tipo_corrigido';
      var res=await api(tipoUrl,{method:'PATCH',headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({cod_classificacao:tipo.codigo_orcamento,origem:'orcamento',classificacao:tipo.descricao})});
+       body:JSON.stringify({cod_classificacao:tipo.codigo_orcamento,origem:'orcamento',classificacao:tipo.descricao,n_os:r.os||null,cod_empresa:(Number(read(r.raw,['cod_empresa','empresa_codigo']))||null),guid_linha:guid||null})});
      if(!res||!['sucesso','sem_alteracao'].includes(res.status)||normalize(res.classificacao)!==normalize(tipo.descricao))
       throw Error('API não confirmou a classificação no CPS.');
      if(res.status==='sucesso')typesDone++;else semMudanca++;
