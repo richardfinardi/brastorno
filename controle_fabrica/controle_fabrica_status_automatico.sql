@@ -118,6 +118,9 @@ SELECT
         WHEN b.cod_status = 10 THEN 'QUALIDADE - Aguardando liberacao'
         WHEN b.cod_status = 11 THEN 'FATURAMENTO - Aguardando faturar'
         WHEN b.cod_status = 12 THEN 'EXPEDICAO - Aguardando expedicao'
+        -- Etapas personalizadas: nao recalcular ENGENHARIA a partir da LM.
+        WHEN b.cod_status NOT IN (6,7,8,9,10,11,12,14) THEN
+            'ETAPA CPS - ' || COALESCE(NULLIF(BTRIM(b.status_servico), ''), b.cod_status::text)
 
         -- Producao atual vence compras; ultimo apontamento vence materiais.
         WHEN aa.cod_os IS NOT NULL THEN
@@ -164,6 +167,8 @@ SELECT
         WHEN b.cod_status = 10 THEN 'Etapa de qualidade informada no CPS'
         WHEN b.cod_status = 11 THEN 'Etapa de faturamento informada no CPS'
         WHEN b.cod_status = 12 THEN 'Etapa de expedicao informada no CPS'
+        WHEN b.cod_status NOT IN (6,7,8,9,10,11,12,14) THEN
+            'Etapa personalizada informada no CPS; nao substituir por materiais da LM'
         WHEN aa.cod_os IS NOT NULL THEN
             'Apontamento em aberto: ' || COALESCE(aa.maquinas, 'maquina nao informada')
         WHEN ua.cod_os IS NOT NULL THEN
