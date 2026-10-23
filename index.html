@@ -582,7 +582,7 @@ function applyPendingVisuals(){
   r.autoDetail=autoDetails.get(registro)||autoDetails.get(keyEmpresa)||autoDetails.get(keyCodigo)||autoDetails.get(keyNumero)||'—';
   var id=osCode(r),p=(id!==null?byOS.get(String(id)):null)||(r.os?byNumber.get(String(r.os).trim()):null)||byOrc.get(registro);
   if(!p||!p.status_novo)return r;
-  if(normalize(r.status)!==normalize(p.status_anterior))return r;
+  if(normalize(r.status)!==normalize(p.status_anterior)&&normalize(r.cpsStatus)!==normalize(p.status_anterior))return r;
   r.previousStatus=r.status;r.status=String(p.status_novo).toUpperCase();
   r.pending=true;r.pendingInfo=p;
   return r
