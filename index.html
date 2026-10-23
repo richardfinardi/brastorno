@@ -852,7 +852,7 @@ function statusReason(r){
  var raw=r.raw||{},st=normalize(r.status),nRaw=read(raw,['cod_status','status_codigo','codigo_status']),n=nRaw===''?null:Number(nRaw);
  var origem=normalize(read(raw,['status','status_calculado']));
  var faturado=normalize(read(raw,['situacao','situacao_prazo']))==='FATURADO'||origem==='FATURADO'||truthy(read(raw,['faturado_total']));
- if(st==='FATURADO'&&faturado)return 'FATURADO\nA consulta sinalizou faturamento integral dos itens de orçamento. A regra de faturamento prevalece sobre o status manual da OS.';
+ if(st==='FATURADO'&&faturado)return 'FATURADO\nFaturamento integral confirmado e OS encerrada no CPS; nao confundir com etapas operacionais em aberto.';
  if(st==='SEM OS')return 'SEM OS\nOrçamento aprovado sem OS vinculada. Este item ainda não possui uma etapa oficial de serviço para movimentar.';
  var concluida=n===13||truthy(read(raw,['os_concluida','concluido']))||origem==='CONCLUIDO'||normalize(read(raw,['prosicao','posicao']))==='CONCLUIDO'||normalize(read(raw,['situacao','situacao_prazo']))==='CONCLUIDO';
  if(st==='FATURAMENTO'&&concluida)return 'AGUARDANDO FATURAMENTO\nA OS está concluída no CPS e tem orçamento vinculado, mas o faturamento integral não foi identificado. Por isso aparece em Faturamento, mesmo que o código da OS seja 13.';
@@ -2010,7 +2010,7 @@ async function toggleHistory(checked){
  historyLoading=(async function(){
   try{
    var response=await api('/controle_fabrica/historico?_t='+Date.now());
-   historyRows=flattenResult(response).map(normalizeItem).filter(function(r){return ['CONCLUÍDO','FATURADO','CANCELADO'].includes(r.status)});
+   historyRows=flattenResult(response).map(normalizeItem); // Nao ocultar OS faturada que ainda esta em etapa operacional no CPS.
    historyLoaded=true;applyPendingVisuals();setupFilters();pageIndex=1;render();setNotice('')
   }catch(e){
    showHistory=false;$('showHistory').checked=false;
