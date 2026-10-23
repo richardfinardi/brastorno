@@ -1811,12 +1811,12 @@ async function dropOn(e,to){
  }
  if(r.pending){await adjustPending(r,to);return}
  if(['FATURADO','SEM OS'].includes(to))return;
- if(!profile.gestor&&!profile.roles.includes(r.status))return;
+ if(!profile.gestor&&!statusAutorizado(r)){setNotice('Você não tem permissão para movimentar este status.','warn');return}
  try{
   var result=await api('/controle_fabrica/solicitacoes',{
    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     cod_os:osCode(r),n_os:r.os,guid_linha:orcamentoGuid(r)||null,
-    status_anterior:r.status,status_novo:to,origem:'KANBAN'
+    status_anterior:(r.cpsStatus||r.status),status_novo:to,origem:'KANBAN'
    })
   });
   var g=orcamentoGuid(r),reg=String(read(r.raw,['registro_id'])||''),emp=(reg.match(/^ORC:(\d+):/i)||[])[1]||'1';
@@ -1824,7 +1824,7 @@ async function dropOn(e,to){
    String(p.guid_linha||'').toUpperCase()!==g.toUpperCase() : String(p.cod_os)!==String(osCode(r))});
   pendingRequests.push({id:result.id,cod_os:osCode(r),n_os:r.os,
    guid_linha:g||null,cod_empresa:g?Number(emp):null,
-   status_anterior:r.status,status_novo:to,usuario:profile.name,status:'PENDENTE'});
+   status_anterior:(r.cpsStatus||r.status),status_novo:to,usuario:profile.name,status:'PENDENTE'});
   applyPendingVisuals();setupFilters();render();
   setNotice('');
   await Promise.allSettled([loadPending(),profile.gestor?loadApprovals():Promise.resolve()]);
