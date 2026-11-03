@@ -70,7 +70,7 @@ function rowsBase(p){return "<td><b>"+esc(p.codigo_interno||p.cod_produto)+"</b>
 }
 function osChips(p){
  var rr=p.reservas_os||[];
- if(!rr.length)return p.tem_reserva?"<span class='chip alerta'>Reserva sem OS identificada</span>":"";
+ if(!rr.length)return p.tem_reserva?"<span class='chip alerta'>Reserva ativa</span>":"";
  return rr.map(function(r){return "<span class='chip'>"+(r.n_os?"OS "+esc(r.n_os):"OS nao identificada")+
   " | "+fmt(r.qtde)+(r.descricao?" | "+esc(r.descricao):"")+"</span>"}).join("");
 }
