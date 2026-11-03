@@ -37,3 +37,12 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
 .campo input:focus,.campo select:focus{outline:0;border-color:#708e34;box-shadow:0 0 0 3px #708e3426}
 @media(max-width:760px){main{padding:14px}.cabecalho.page-hero{align-items:center}.cabecalho h1{font-size:22px}}
 @media(max-width:510px){main{padding:12px}.cabecalho.page-hero{align-items:flex-start;flex-wrap:wrap}.cabecalho.page-hero .campo{align-self:flex-start;width:100%}.cabecalho.page-hero .campo select{width:100%}}
+
+/* V2.4 - Filtros da estrutura de materiais */
+#painelFiltros{width:100%;margin-top:3px;padding:13px 0 3px;border-top:1px solid #e0e6ee}
+.campos-filtros{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.filtro-item{min-width:0}.filtro-item label{font-size:10px}.filtro-item select{min-width:0;width:100%;text-overflow:ellipsis}
+.acoes-filtros{padding-top:11px;display:flex;align-items:center;justify-content:space-between;gap:12px}.acoes-filtros span{font-size:11px;color:#738198}
+.subgrupos{min-width:125px;max-width:220px}.subgrupos small{white-space:normal}
+@media(max-width:1050px){.campos-filtros{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:630px){.campos-filtros{grid-template-columns:repeat(2,minmax(0,1fr))}.acoes-filtros{flex-wrap:wrap}.acoes-filtros span{max-width:100%}}
