@@ -27,7 +27,13 @@ async function api(caminho,metodo,body){
  var r=await fetch(API+caminho,opt),val=null;
  try{val=await r.json()}catch(e){}
  if(r.status===401){localStorage.removeItem("brastorno_token");location.href="../login.html";throw Error("Sessao expirada.")}
- if(!r.ok)throw Error((val&&val.detail)||"Erro HTTP "+r.status);
+ if(!r.ok){
+  var d=val&&val.detail;
+  var mensagem=typeof d==="string"?d:(Array.isArray(d)?
+   d.map(function(x){return (x.loc?x.loc.slice(1).join(".")+": ":"")+(x.msg||"Entrada invalida")}).join(" | "):
+   (d&&d.message)||((val&&val.message)||"Erro HTTP "+r.status));
+  var erro=Error(mensagem);erro.http=r.status;erro.detail=d;throw erro;
+ }
  return val;
 }
 function isGestor(){return perfil&&perfil.inventario_gestor}
@@ -371,7 +377,15 @@ function recontarItem(id){
  $("tipoDestinoRecontagem").scrollIntoView({behavior:"smooth",block:"center"});
  $("tipoDestinoRecontagem").focus({preventScroll:true});
 }
+function erroRecontagem(texto){
+ var painel=$("erroRecontagem");
+ if(!painel){aviso(texto,true);return}
+ painel.textContent=texto||"";
+ painel.hidden=!texto;
+ if(texto){aviso("Recontagem nao enviada: "+texto,true);painel.scrollIntoView({block:"nearest",behavior:"smooth"})}
+}
 function destinoRecontagem(){
+ erroRecontagem("");
  var pessoa=$("tipoDestinoRecontagem").value==="usuario";
  $("pessoaRecontagemBloco").hidden=!pessoa;
  $("grupoRecontagemBloco").hidden=pessoa;
@@ -386,30 +400,64 @@ async function carregarDestinosRecontagem(){
   if(eAgora!==empresa)return;
   equipes=g.grupos||[];usuariosInventario=u.usuarios||[];
   optionList($("pessoaRecontagem"),usuariosInventario.map(function(x){return {id:x,nome:x}}),"","Selecione um usuario...");
-  optionList($("grupoRecontagem"),equipes,"","Selecione um grupo...");
+  var destinoAnterior=$("grupoRecontagem").value;
+  $("grupoRecontagem").innerHTML="<option value=''>Selecione um grupo...</option>";
+  equipes.forEach(function(g){
+   var membros=(g.integrantes||[]).length;
+   var opt=document.createElement("option");
+   opt.value=g.id;opt.textContent=puro(g.nome)+" ("+membros+" integrante"+(membros===1?"":"s")+")";
+   opt.disabled=membros===0;
+   if(!membros)opt.title="Adicione integrantes em Parametrizacoes";
+   $("grupoRecontagem").add(opt);
+  });
+  if(destinoAnterior)$("grupoRecontagem").value=destinoAnterior;
  }catch(ex){aviso("Destinos de recontagem: "+erroMsg(ex),true)}
 }
 async function solicitarRecontagem(){
+ erroRecontagem("");
  var ids=Array.from(selecaoRecontagem);
- if(ids.length<1||ids.length>100){aviso("Selecione de 1 a 100 contagens para recontagem.",true);return}
+ if(ids.length<1||ids.length>100){erroRecontagem("Selecione de 1 a 100 contagens.");return}
  var porPessoa=$("tipoDestinoRecontagem").value==="usuario";
  var destino=porPessoa?$("pessoaRecontagem").value:$("grupoRecontagem").value;
- if(!destino){aviso("Selecione outro usuario ou grupo para recontar.",true);return}
- var texto="Solicitar recontagem de "+ids.length+" material(is) para "+
-  (porPessoa?"usuario ":"grupo ")+destino+"?\nNenhuma movimentacao de estoque sera feita.";
- if(!confirm(texto))return;
+ if(!destino){erroRecontagem("Escolha uma pessoa ou grupo para a recontagem.");return}
+ var linhas=ids.map(function(id){return contagensRecontagem.find(function(x){return x.id===id})});
+ if(linhas.some(function(x){return !x})){erroRecontagem("Atualize a Conferencia e selecione novamente.");return}
+ var grupo=porPessoa?null:equipes.find(function(g){return g.id===destino});
+ if(grupo&&!(grupo.integrantes||[]).length){
+  erroRecontagem("O grupo "+grupo.nome+" nao tem integrantes. Adicione pessoas em Parametrizacoes antes de usar.");
+  return;
+ }
+ for(var k=0;k<linhas.length;k++){
+  var r=linhas[k],cod=r.codigo_interno||r.cod_produto;
+  if(!porPessoa&&r.grupo_atribuido_atual&&r.grupo_atribuido_atual===destino){
+   erroRecontagem("Material "+cod+": esse e o grupo atual. Selecione OUTRO grupo ou outra pessoa.");
+   return;
+  }
+  if(porPessoa&&(
+     String(r.usuario_atribuido_atual||"").toUpperCase()===destino.toUpperCase()||
+     String(r.usuario||"").toUpperCase()===destino.toUpperCase())){
+   erroRecontagem("Material "+cod+": "+destino+" ja foi responsavel pela contagem. Selecione outra pessoa.");
+   return;
+  }
+ }
+ var nomeDestino=porPessoa?destino:(grupo?grupo.nome:destino);
+ if(!confirm("Solicitar recontagem de "+ids.length+" material(is) para "+nomeDestino+
+  "?\nAs contagens anteriores permanecem no historico; nao altera o estoque CPS."))return;
  var body={cod_empresa:empresa,ids:ids,
   usuario:porPessoa?destino:"",
   grupo_id:porPessoa?"":destino,
   motivo:$("motivoRecontagem").value.trim()};
  try{
   $("btnSolicitarRecontagem").disabled=true;
-  var r=await api("/brastorno/inventario/recontagens","POST",body);
+  var resposta=await api("/brastorno/inventario/recontagens","POST",body);
   limparRecontagem();
   $("motivoRecontagem").value="";
   await carregarConferencia();
-  aviso(r.quantidade+" material(is) enviado(s) para recontagem. Aparecerao somente ao novo grupo ou usuario.");
- }catch(ex){aviso(erroMsg(ex),true);atualizarSelecaoRecontagem()}
+  aviso(resposta.quantidade+" material(is) enviado(s) para recontagem de "+nomeDestino+".");
+ }catch(ex){
+  erroRecontagem(erroMsg(ex));
+  atualizarSelecaoRecontagem();
+ }
 }
 window.BRMarcarRecontagem=marcarRecontagem;
 window.BRSelecionarTodasRecontagens=selecionarTodasRecontagens;
