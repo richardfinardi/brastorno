@@ -176,16 +176,16 @@ async function carregarConferencia(){
  $("listaConferencia").innerHTML="<p>Carregando contagens...</p>";
  try{
   var s=$("statusConferencia").value,d=await api("/brastorno/inventario/contagens?cod_empresa="+empresa+"&status="+s+"&pagina=1&limite=200");
-  var out="<div class='tabela'><table><thead><tr><th>Data</th><th>Produto</th><th>Contador</th><th>Saldo CPS na contagem</th><th>Contado</th><th>Diferenca</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
+  var out="<div class='tabela'><table><thead><tr><th>Data</th><th>Produto</th><th>Contador</th><th>Saldo CPS na contagem</th><th>Contado</th><th>Diferenca</th><th>Impacto custo</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
   (d.contagens||[]).forEach(function(r){
    var i=r.payload.itens[0],dif=num(i.qtde_inventariada)-num(i.estoque_esperado);
-   out+="<tr><td>"+esc(r.criada_em)+"</td><td>#"+esc(r.cod_produto)+"</td><td>"+esc(r.usuario)+"</td>"+
+   out+="<tr><td>"+esc(r.criada_em)+"</td><td><b>"+esc(r.codigo_interno||("#"+r.cod_produto))+"</b><small>"+esc(r.produto)+"</small></td><td>"+esc(r.usuario)+"</td>"+
     "<td class='direita'>"+fmt(i.estoque_esperado)+"</td><td class='direita'>"+fmt(i.qtde_inventariada)+"</td>"+
-    "<td class='direita "+(dif<0?"negativo":"")+"'>"+fmt(dif)+"</td><td>"+esc(r.status)+"</td>"+
+    "<td class='direita "+(dif<0?"negativo":"")+"'>"+fmt(dif)+"</td><td class='direita'>"+moeda(dif*num(r.preco_custo))+"</td><td>"+esc(r.status)+"</td>"+
     "<td>"+(r.status==="PENDENTE"?"<button class='mini destaque' onclick='BRDecidir(\""+esc(r.id)+"\",true)'>Aplicar no CPS</button>"+
         "<button class='mini' onclick='BRDecidir(\""+esc(r.id)+"\",false)'>Rejeitar</button>":"")+"</td></tr>";
   });
-  $("listaConferencia").innerHTML=out+(!d.contagens.length?"<tr><td colspan='8'>Sem contagens neste status.</td></tr>":"")+"</tbody></table></div>"+
+  $("listaConferencia").innerHTML=out+(!d.contagens.length?"<tr><td colspan='9'>Sem contagens neste status.</td></tr>":"")+"</tbody></table></div>"+
     "<p>"+fmt(d.total)+" registro(s). Exibindo ate 200 mais recentes.</p>";
  }catch(e){$("listaConferencia").innerHTML="<div class='erro-caixa'>"+esc(erroMsg(e))+"</div>";aviso(erroMsg(e),true)}
 }
