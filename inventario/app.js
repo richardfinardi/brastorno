@@ -8,6 +8,7 @@ var itens=[],rascunhos={},temporizador=null,cabecalhoConsulta=null;
 var camposFiltros=["familia","grupo","subgrupo1","subgrupo2","subgrupo3","subgrupo4","subgrupo5","subgrupo6","subgrupo7","local_estoque"];
 var filtrosAtivos={};var consultaSerial=0;
 var equipes=[],usuariosInventario=[];
+var consultaFiltrosSerial=0;var consultaAtribSerial=0;var selecaoAtrib=new Set(),listaAtribAtual=[];
 var $=function(id){return document.getElementById(id)};
 function esc(s){return String(s===null||s===undefined?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function puro(v){return String(v===null||v===undefined?"":v).normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
@@ -51,41 +52,50 @@ function setEmpresa(v){
  carregarFiltros();trocarAba(aba)
 }
 async function carregarFiltros(){
- var empresaInicio=empresa;
- $("msgFiltros").textContent="Carregando opcoes...";
+ var eAtual=empresa,serial=++consultaFiltrosSerial;
+ $("msgFiltros").textContent="Atualizando opcoes de filtros...";
  try{
-  var resultado=await api("/brastorno/inventario/filtros?cod_empresa="+empresaInicio);
-  if(empresaInicio!==empresa)return;
+  var query="/brastorno/inventario/filtros?cod_empresa="+eAtual;
+  camposFiltros.forEach(function(k){
+   if(filtrosAtivos[k])query+="&"+k+"="+encodeURIComponent(filtrosAtivos[k]);
+  });
+  var resultado=await api(query);
+  if(eAtual!==empresa||serial!==consultaFiltrosSerial)return;
   camposFiltros.forEach(function(k){
    var select=$("filtro_"+k),valor=String(filtrosAtivos[k]||"");
    if(!select)return;
+   var opcoes=resultado.filtros[k]||[];
    select.innerHTML="<option value=''>Todos</option>";
-   (resultado.filtros[k]||[]).forEach(function(v){
+   opcoes.forEach(function(v){
     var opt=document.createElement("option");opt.value=v;opt.textContent=puro(v);select.add(opt);
    });
+   // Mantenha o filtro escolhido mesmo se desaparecer do subconjunto.
+   if(valor&&!opcoes.includes(valor)){
+    var extra=document.createElement("option");extra.value=valor;extra.textContent=puro(valor);
+    select.add(extra);
+   }
    select.value=valor;
+   // Os filtros independentes da distribuicao continuam disponiveis.
    var dest=$("dist_"+k);
-   if(dest){
-    var vAntigo=dest.value;
-    dest.innerHTML="<option value=''>Todos</option>";
-    (resultado.filtros[k]||[]).forEach(function(v){
-     var opt=document.createElement("option");opt.value=v;opt.textContent=puro(v);dest.add(opt);
-    });
-    dest.value=vAntigo;
+   if(dest&&dest.options.length<=1){
+    var qTodas=resultado.filtros[k]||[];
+    qTodas.forEach(function(v){var opt=document.createElement("option");opt.value=v;opt.textContent=puro(v);dest.add(opt)});
    }
   });
-  $("msgFiltros").textContent="Familia, grupo, subgrupos 1 a 7 e local de estoque";
- }catch(e){$("msgFiltros").textContent="Nao foi possivel carregar os filtros: "+erroMsg(e)}
+  $("msgFiltros").textContent="Opcoes incrementais conforme os filtros selecionados.";
+ }catch(erro){
+  if(serial===consultaFiltrosSerial)$("msgFiltros").textContent="Erro ao carregar filtros: "+erroMsg(erro);
+ }
 }
 function aplicarFiltro(){
  camposFiltros.forEach(function(k){var x=$("filtro_"+k);filtrosAtivos[k]=x?x.value:""});
  var usados=camposFiltros.filter(function(k){return !!filtrosAtivos[k]}).length;
  $("btnFiltro").textContent="Filtros"+(usados?" ("+usados+")":"");
- pagina=1;recarregarAba();
+ pagina=1;carregarFiltros();recarregarAba();
 }
 function limparFiltros(){
  filtrosAtivos={};camposFiltros.forEach(function(k){var x=$("filtro_"+k);if(x)x.value=""});
- $("btnFiltro").textContent="Filtros";pagina=1;recarregarAba();
+ $("btnFiltro").textContent="Filtros";pagina=1;carregarFiltros();recarregarAba();
 }
 function recarregarAba(){
  if(aba==="conferencia")carregarConferencia();
@@ -325,6 +335,9 @@ async function carregarEquipes(){
   optionList($("grupoEditar"),equipes,"","Selecione um grupo...");
   optionList($("destinoGrupo"),equipes,"","Selecione um grupo...");
   optionList($("destinoPessoa"),usuariosInventario.map(function(x){return {id:x,nome:x}}),"","Selecione um usuario...");
+  var grupoAtual=$("filtroGrupoAtribuido").value,usuarioAtual=$("filtroUsuarioAtribuido").value;
+  optionList($("filtroGrupoAtribuido"),equipes,grupoAtual,"Todos os grupos");
+  optionList($("filtroUsuarioAtribuido"),usuariosInventario.map(function(x){return {id:x,nome:x}}),usuarioAtual,"Todos os usuarios");
   $("usuariosGrupo").innerHTML="";
   $("resumoGrupos").textContent=equipes.length+" grupo(s) configurado(s).";
   $("listaTolerancias").innerHTML=(res[2].tolerancias||[]).map(function(x){
@@ -385,20 +398,83 @@ async function distribuir(){
   $("codigosDistribuicao").value="";await carregarAtribuicoes();
  }catch(e){aviso(erroMsg(e),true)}
 }
-async function carregarAtribuicoes(){
- try{
-  var status=$("statusAtribuicao").value;
-  var d=await api("/brastorno/inventario/atribuicoes?cod_empresa="+empresa+"&status="+status+"&limite=120"+parametrosFiltros());
-  var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Usuario / Grupo</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
-  (d.atribuicoes||[]).forEach(function(r){
-   out+="<tr><td>"+esc(r.codigo_interno||r.cod_produto)+"</td><td>"+esc(r.produto)+"</td>"+
-   "<td>"+esc(r.usuario||r.grupo_nome||"")+"</td><td>"+esc(r.status)+"</td>"+
-   "<td>"+(r.status==="ATRIBUIDO"?"<button class='mini' onclick='BRDesatribuir("+r.cod_produto+")'>Remover atribuicao</button>":"")+"</td></tr>";
-  });
-  $("listaAtribuicoes").innerHTML=out+(d.atribuicoes.length?"":"<tr><td colspan='5'>Sem materiais atribuidos.</td></tr>")+
-   "</tbody></table></div><p class='info-suave'>"+fmt(d.total)+" materiais. Exibindo ate 120.</p>";
- }catch(e){$("listaAtribuicoes").textContent=erroMsg(e)}
+function filtrosDistribuicao(){
+ return {status:$("statusAtribuicao").value,
+         grupo_id:$("filtroGrupoAtribuido").value,
+         usuario:$("filtroUsuarioAtribuido").value};
 }
+function filtrosAtribuicaoAlterados(){
+ selecaoAtrib.clear();carregarAtribuicoes();
+}
+function alternarSelecao(codigo,ativo){
+ if(ativo)selecaoAtrib.add(Number(codigo));else selecaoAtrib.delete(Number(codigo));
+ atualizarBarraRemocao();
+}
+function selecionarVisiveis(marcar){
+ listaAtribAtual.filter(function(r){return r.status==="ATRIBUIDO"}).forEach(function(r){
+  if(marcar)selecaoAtrib.add(Number(r.cod_produto));else selecaoAtrib.delete(Number(r.cod_produto));
+ });
+ document.querySelectorAll("[data-check-atribuicao]").forEach(function(c){c.checked=marcar});
+ atualizarBarraRemocao();
+}
+function atualizarBarraRemocao(){
+ var filtros=filtrosDistribuicao(),grupoOuUsuario=!!(filtros.grupo_id||filtros.usuario);
+ $("contadorSelecaoAtrib").textContent=selecaoAtrib.size+" material(is) selecionado(s)";
+ $("btnRemoverSelecionados").disabled=selecaoAtrib.size===0;
+ $("btnRemoverFiltrados").disabled=!grupoOuUsuario||!(listaAtribAtual.length);
+}
+async function carregarAtribuicoes(){
+ var serial=++consultaAtribSerial,eAtual=empresa;
+ try{
+  var filtros=filtrosDistribuicao();
+  var query="/brastorno/inventario/atribuicoes?cod_empresa="+eAtual+
+    "&status="+filtros.status+"&limite=120"+parametrosFiltros();
+  if(filtros.grupo_id)query+="&grupo_atribuido="+encodeURIComponent(filtros.grupo_id);
+  if(filtros.usuario)query+="&usuario_atribuido="+encodeURIComponent(filtros.usuario);
+  var d=await api(query);
+  if(serial!==consultaAtribSerial||eAtual!==empresa)return;
+  listaAtribAtual=d.atribuicoes||[];
+  selecaoAtrib.clear();
+  var out="<div class='tabela'><table><thead><tr>"+
+    "<th><input type='checkbox' aria-label='Selecionar exibidos para remocao' onchange='BRSelecionarVisiveis(this.checked)'></th>"+
+    "<th>Codigo</th><th>Material</th><th>Usuario / Grupo</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
+  listaAtribAtual.forEach(function(r){
+   var apto=r.status==="ATRIBUIDO";
+   out+="<tr><td>"+(apto?"<input type='checkbox' data-check-atribuicao onchange='BRSelecionar("+r.cod_produto+",this.checked)' aria-label='Selecionar material'>":"")+"</td>"+
+   "<td>"+esc(r.codigo_interno||r.cod_produto)+"</td><td>"+esc(r.produto)+"</td>"+
+   "<td>"+esc(r.usuario||r.grupo_nome||"")+"</td><td>"+esc(r.status)+"</td>"+
+   "<td>"+(apto?"<button class='mini' onclick='BRDesatribuir("+r.cod_produto+")'>Remover</button>":"")+"</td></tr>";
+  });
+  $("listaAtribuicoes").innerHTML=out+(listaAtribAtual.length?"":"<tr><td colspan='6'>Sem materiais neste filtro.</td></tr>")+
+   "</tbody></table></div><p class='info-suave'>"+fmt(d.total)+" materiais. Exibindo ate 120. Removiveis: "+fmt(d.removiveis||0)+".</p>";
+  $("limiteRemocao").textContent="Apenas atribuicoes nao contadas podem ser removidas. Ate 500 selecionados ou 2.000 filtrados.";
+  atualizarBarraRemocao();
+  $("btnRemoverFiltrados").disabled=!(d.removiveis>0)||!(filtros.grupo_id||filtros.usuario);
+ }catch(e){if(serial===consultaAtribSerial)$("listaAtribuicoes").textContent=erroMsg(e)}
+}
+async function removerLote(todos){
+ var filtros=filtrosDistribuicao(),itens=[...selecaoAtrib];
+ if(todos&&!(filtros.grupo_id||filtros.usuario)){aviso("Selecione um grupo de contagem ou usuario para remover todos.",true);return}
+ if(!todos&&!itens.length){aviso("Marque os materiais que deseja remover.",true);return}
+ if(!todos&&itens.length>500){aviso("Maximo de 500 materiais selecionados por operacao.",true);return}
+ var descricao=todos?"TODOS OS MATERIAIS AINDA NAO CONTADOS DO GRUPO/USUARIO FILTRADO":itens.length+" materiais selecionados";
+ if(!confirm("REMOVER ATRIBUICOES: "+descricao+"?\nNao remove materiais ja contados.\nEsta acao NAO altera o estoque no CPS."))return;
+ var payload={cod_empresa:empresa,cod_produtos:todos?[]:itens,
+   grupo_id:filtros.grupo_id,usuario_atribuido:filtros.usuario,todos_filtrados:!!todos,
+   busca:$("pesquisa").value.trim(),filtros:{}};
+ camposFiltros.forEach(function(k){if(filtrosAtivos[k])payload.filtros[k]=filtrosAtivos[k]});
+ try{
+  $("btnRemoverSelecionados").disabled=true;$("btnRemoverFiltrados").disabled=true;
+  var r=await api("/brastorno/inventario/atribuicoes/remover-lote","POST",payload);
+  aviso(r.removidos+" atribuicao(oes) removida(s). Nenhum estoque alterado.");
+  await carregarAtribuicoes();
+ }catch(e){aviso(erroMsg(e),true);atualizarBarraRemocao()}
+}
+window.BRFiltroAtribuicoes=filtrosAtribuicaoAlterados;
+window.BRSelecionar=alternarSelecao;
+window.BRSelecionarVisiveis=selecionarVisiveis;
+window.BRRemoverLote=removerLote;
+
 async function desatribuir(codigo){
  if(!confirm("Remover a atribuicao do produto "+codigo+"?"))return;
  try{
