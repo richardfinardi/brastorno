@@ -8,6 +8,8 @@ var itens=[],rascunhos={},temporizador=null,cabecalhoConsulta=null;
 var camposFiltros=["familia","grupo","subgrupo1","subgrupo2","subgrupo3","subgrupo4","subgrupo5","subgrupo6","subgrupo7","local_estoque"];
 var filtrosAtivos={};var consultaSerial=0;
 var equipes=[],usuariosInventario=[];
+var selecaoRecontagem=new Set();
+var contagensRecontagem=[];
 var consultaFiltrosSerial=0;var consultaAtribSerial=0;var selecaoAtrib=new Set(),listaAtribAtual=[];
 var $=function(id){return document.getElementById(id)};
 function esc(s){return String(s===null||s===undefined?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
@@ -42,7 +44,7 @@ function trocarAba(id){
  $("exportarInventario").hidden=(id!=="reservados");
  aviso("");
  if(id==="parametrizacoes"){carregarConfig();carregarEquipes();carregarFiltros("dist");}
- else if(id==="conferencia")carregarConferencia();
+ else if(id==="conferencia"){carregarDestinosRecontagem();carregarConferencia()}
  else carregarItens();
  carregarFiltros("main");
 }
@@ -288,15 +290,17 @@ async function gravarConfig(){
  }catch(e){aviso(erroMsg(e),true)}
 }
 async function carregarConferencia(){
+ selecaoRecontagem.clear();contagensRecontagem=[];atualizarSelecaoRecontagem();
  $("listaConferencia").innerHTML="<p>Carregando contagens...</p>";
  try{
   var status=$("statusConferencia").value;
   var d=await api("/brastorno/inventario/contagens?cod_empresa="+empresa+"&status="+status+"&pagina=1&limite=250"+parametrosFiltros());
   var todas=d.contagens||[];
+  contagensRecontagem=todas;
   var bloqueados=todas.filter(function(r){return r.status==="PENDENTE"&&r.segregado_reserva});
   var regulares=todas.filter(function(r){return !(r.status==="PENDENTE"&&r.segregado_reserva)});
   function tabela(rows){
-   var out="<div class='tabela'><table><thead><tr><th>Data</th><th>Material</th><th>Contador</th><th>Unid.</th><th>Saldo CPS</th><th>Reservado</th><th>Contado</th><th>Diferenca</th><th>Tolerancia</th><th>Impacto custo</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
+   var out="<div class='tabela'><table><thead><tr><th>Selecionar</th><th>Data</th><th>Material</th><th>Contador</th><th>Unid.</th><th>Saldo CPS</th><th>Reservado</th><th>Contado</th><th>Diferenca</th><th>Tolerancia</th><th>Impacto custo</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
    rows.forEach(function(r){
     var i=(r.payload&&r.payload.itens||[])[0]||{};
     var qtd=num(i.qtde_inventariada),saldo=num(i.estoque_esperado),dif=qtd-saldo;
@@ -307,7 +311,10 @@ async function carregarConferencia(){
     var tolText=(tolerancia===null||tolerancia===undefined?"Nao configurada":("±"+fmt(tolerancia)+"%"))+
       (percentual===null||percentual===undefined?"":(" | Desvio "+fmt(percentual)+"%"));
     var estiloTol=r.dentro_tolerancia?"ok-tolerancia":"fora-tolerancia";
-    out+="<tr class='"+(abaixo?"linha-bloqueada":"")+"'><td>"+esc(r.criada_em)+"</td>"+
+    out+="<tr class='"+(abaixo?"linha-bloqueada":"")+"'>"+
+      "<td>"+(["PENDENTE","APLICADA"].includes(r.status)?
+      "<input type='checkbox' data-recontagem='"+esc(r.id)+"' onchange='BRMarcarRecontagem(\""+esc(r.id)+"\",this.checked)' aria-label='Selecionar para recontagem'>":"")+"</td>"+
+      "<td>"+esc(r.criada_em)+"</td>"+
       "<td><b>"+esc(r.codigo_interno||("#"+r.cod_produto))+"</b><small>"+esc(r.produto)+"</small></td>"+
        "<td>"+esc(r.usuario)+"</td><td>"+esc(unidadeExibida||"—")+"</td>"+
       "<td class='direita'>"+fmt(saldo)+"</td><td class='direita'>"+fmt(r.qtde_reservada_atual)+"</td>"+
@@ -315,13 +322,15 @@ async function carregarConferencia(){
       "<td class='"+estiloTol+"'>"+esc(tolText)+"</td>"+
       "<td class='direita'>"+moeda(dif*num(r.preco_custo))+"</td>"+
       "<td>"+(abaixo?"<span class='tag-bloqueio'>ABAIXO DA RESERVA</span>":esc(r.status))+"</td>"+
-      "<td>"+(r.status!=="PENDENTE"?"":abaixo?
-        "<span class='motivo-bloqueio'>Gravacao bloqueada. Regularizar reserva ou recontar.</span>"+
-        "<button class='mini' onclick='BRDecidir(\""+esc(r.id)+"\",false)'>Recontagem</button>":
-        "<button class='mini destaque' onclick='BRDecidir(\""+esc(r.id)+"\",true)'>Aplicar no CPS</button>"+
-        "<button class='mini' onclick='BRDecidir(\""+esc(r.id)+"\",false)'>Rejeitar</button>")+"</td></tr>";
+      "<td>"+(r.status==="PENDENTE"?(abaixo?
+         "<span class='motivo-bloqueio'>Gravacao bloqueada. Encaminhe para outra contagem.</span>"+
+         "<button class='mini' onclick='BRRecontarItem(\""+esc(r.id)+"\")'>Solicitar recontagem</button>":
+         "<button class='mini destaque' onclick='BRDecidir(\""+esc(r.id)+"\",true)'>Aplicar no CPS</button>"+
+         "<button class='mini' onclick='BRDecidir(\""+esc(r.id)+"\",false)'>Rejeitar</button>"+
+         "<button class='mini' onclick='BRRecontarItem(\""+esc(r.id)+"\")'>Recontar</button>"):
+        (r.status==="APLICADA"?"<button class='mini' onclick='BRRecontarItem(\""+esc(r.id)+"\")'>Recontar</button>":""))+"</td></tr>";
    });
-   return out+(rows.length?"":"<tr><td colspan='12'>Nenhuma contagem.</td></tr>")+"</tbody></table></div>";
+   return out+(rows.length?"":"<tr><td colspan='13'>Nenhuma contagem.</td></tr>")+"</tbody></table></div>";
   }
   var html="<div class='segregacao-bloco'><div class='segregacao-titulo'><strong>ABAIXO DA QUANTIDADE RESERVADA</strong><span class='tag-bloqueio'>"+bloqueados.length+" item(ns)</span></div>"+
     "<p class='alerta-reserva'>Estes itens estao separados e nao podem ajustar o estoque enquanto a reserva real no CPS superar a contagem.</p>"+
@@ -330,8 +339,85 @@ async function carregarConferencia(){
     tabela(regulares)+"</div>"+
     "<p class='info-suave'>"+fmt(d.total)+" contagem(ns). Exibindo ate 250 por consulta.</p>";
   $("listaConferencia").innerHTML=html;
+  atualizarSelecaoRecontagem();
  }catch(e){$("listaConferencia").innerHTML="<div class='erro-caixa'>"+esc(erroMsg(e))+"</div>";aviso(erroMsg(e),true)}
 }
+function atualizarSelecaoRecontagem(){
+ $("contadorRecontagem").textContent=selecaoRecontagem.size+" item(ns) selecionado(s)";
+ $("btnSolicitarRecontagem").disabled=selecaoRecontagem.size===0;
+}
+function marcarRecontagem(id,marcado){
+ if(marcado)selecaoRecontagem.add(id);
+ else selecaoRecontagem.delete(id);
+ atualizarSelecaoRecontagem();
+}
+function selecionarTodasRecontagens(){
+ document.querySelectorAll("[data-recontagem]").forEach(function(el){
+  if(!el.checked){el.checked=true;selecaoRecontagem.add(el.getAttribute("data-recontagem"))}
+ });
+ atualizarSelecaoRecontagem();
+}
+function limparRecontagem(){
+ selecaoRecontagem.clear();
+ document.querySelectorAll("[data-recontagem]").forEach(function(el){el.checked=false});
+ atualizarSelecaoRecontagem();
+}
+function recontarItem(id){
+ limparRecontagem();
+ marcarRecontagem(id,true);
+ document.querySelectorAll("[data-recontagem]").forEach(function(el){
+  el.checked=el.getAttribute("data-recontagem")===id;
+ });
+ $("tipoDestinoRecontagem").scrollIntoView({behavior:"smooth",block:"center"});
+ $("tipoDestinoRecontagem").focus({preventScroll:true});
+}
+function destinoRecontagem(){
+ var pessoa=$("tipoDestinoRecontagem").value==="usuario";
+ $("pessoaRecontagemBloco").hidden=!pessoa;
+ $("grupoRecontagemBloco").hidden=pessoa;
+}
+async function carregarDestinosRecontagem(){
+ var eAgora=empresa;
+ try{
+  var [g,u]=await Promise.all([
+   api("/brastorno/inventario/grupos?cod_empresa="+empresa),
+   api("/brastorno/inventario/usuarios")
+  ]);
+  if(eAgora!==empresa)return;
+  equipes=g.grupos||[];usuariosInventario=u.usuarios||[];
+  optionList($("pessoaRecontagem"),usuariosInventario.map(function(x){return {id:x,nome:x}}),"","Selecione um usuario...");
+  optionList($("grupoRecontagem"),equipes,"","Selecione um grupo...");
+ }catch(ex){aviso("Destinos de recontagem: "+erroMsg(ex),true)}
+}
+async function solicitarRecontagem(){
+ var ids=Array.from(selecaoRecontagem);
+ if(ids.length<1||ids.length>100){aviso("Selecione de 1 a 100 contagens para recontagem.",true);return}
+ var porPessoa=$("tipoDestinoRecontagem").value==="usuario";
+ var destino=porPessoa?$("pessoaRecontagem").value:$("grupoRecontagem").value;
+ if(!destino){aviso("Selecione outro usuario ou grupo para recontar.",true);return}
+ var texto="Solicitar recontagem de "+ids.length+" material(is) para "+
+  (porPessoa?"usuario ":"grupo ")+destino+"?\nNenhuma movimentacao de estoque sera feita.";
+ if(!confirm(texto))return;
+ var body={cod_empresa:empresa,ids:ids,
+  usuario:porPessoa?destino:"",
+  grupo_id:porPessoa?"":destino,
+  motivo:$("motivoRecontagem").value.trim()};
+ try{
+  $("btnSolicitarRecontagem").disabled=true;
+  var r=await api("/brastorno/inventario/recontagens","POST",body);
+  limparRecontagem();
+  $("motivoRecontagem").value="";
+  await carregarConferencia();
+  aviso(r.quantidade+" material(is) enviado(s) para recontagem. Aparecerao somente ao novo grupo ou usuario.");
+ }catch(ex){aviso(erroMsg(ex),true);atualizarSelecaoRecontagem()}
+}
+window.BRMarcarRecontagem=marcarRecontagem;
+window.BRSelecionarTodasRecontagens=selecionarTodasRecontagens;
+window.BRLimparRecontagem=limparRecontagem;
+window.BRRecontarItem=recontarItem;
+window.BRDestinoRecontagem=destinoRecontagem;
+window.BRSolicitarRecontagem=solicitarRecontagem;
+
 async function decidir(id,aplicar){
  if(!confirm(aplicar?"CONFIRMAR GRAVACAO REAL NO CPS? O estoque sera ajustado e registrado no Kardex.":"Rejeitar esta contagem?"))return;
  try{
