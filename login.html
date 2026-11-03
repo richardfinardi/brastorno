@@ -1,36 +1,39 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brastorno • Login</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brastorno: {
-                            green: '#6b8e23',
-                            greenHover: '#55721a',
-                            blue: '#1b2d56',
-                            darkBlue: '#101a35'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-<link rel="icon" href="./controle_fabrica/favicon.png" type="image/png"><style>.brand-logos{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:18px;margin:0 0 17px}.brand-logos img{object-fit:contain;height:auto}.brand-logos .customer{width:205px;max-width:94%}.brand-logos .partner{width:180px;max-width:94%}.brand-logos .sep{height:35px;width:1px;background:#5c6d89}@media(max-width:450px){.brand-logos .customer{width:165px}.brand-logos .partner{width:155px}.brand-logos .sep{display:none}}</style></head>
-<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 font-sans">
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Login | Brastorno</title><link rel="icon" href="./controle_fabrica/favicon.png">
+<script src="https://cdn.tailwindcss.com"></script><script>tailwind.config={theme:{extend:{colors:{brastorno:{green:"#708e34",greenHover:"#617b2e",blue:"#203657",darkBlue:"#142446"}}}}}</script>
+<style>
+:root{--navy:#142446;--olive:#708e34;--bg:#f4f6fa;--ink:#1d2a40;--muted:#738198}
+.site-header{background:#142446;color:#fff;border-bottom:5px solid #708e34;box-shadow:0 3px 15px #0c18342b}
+.site-head{max-width:1500px;min-height:115px;padding:17px 24px;margin:auto;display:flex;gap:17px;align-items:center;justify-content:space-between}
+.site-brand{display:flex;gap:17px;align-items:center;min-width:0}
+.site-brand .client-brand-logo{width:184px;max-height:66px;height:auto;object-fit:contain;background:transparent!important;padding:0!important;border:0!important;border-radius:0!important;flex-shrink:0}
+.site-brand .partner-brand-logo{width:188px;max-height:42px;height:auto;object-fit:contain;background:transparent!important;padding:0!important;border:0!important;border-radius:0!important;flex-shrink:0}
+.site-brand .brand-divider{width:1px;height:38px;background:#60708a;flex-shrink:0}
+.site-brand .brand-copy{min-width:0}
+.site-brand .brand-copy strong{font-size:14px;line-height:1.35;font-weight:850;letter-spacing:.04em;display:block;color:#fff;text-transform:uppercase;white-space:nowrap}
+.site-brand .brand-copy small{font-size:11px;color:#b9c7dc;display:block;line-height:1.35;margin-top:3px}
+.site-actions{display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.site-actions .site-action{background:#243758;color:#e6edf6;border:1px solid #50617c;border-radius:10px;font-weight:700;font-size:12px;padding:8px 11px;text-decoration:none;cursor:pointer}
+.site-actions .site-action:hover{background:#365072;color:#fff}
+.page-eyebrow{color:#708e34;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+.page-hero h1{font-size:26px;letter-spacing:-.04em;color:#142446;line-height:1.25;margin:4px 0}
+.page-subtitle{font-size:12px;color:#738198;margin:3px 0}
+@media(max-width:1100px){.site-brand{gap:12px}.site-brand .client-brand-logo{width:155px}.site-brand .partner-brand-logo{width:150px}.site-brand .brand-copy strong{font-size:12px}}
+@media(max-width:760px){.site-head{padding:12px;min-height:0;flex-wrap:wrap;gap:9px}.site-actions{width:100%}.site-brand .client-brand-logo{width:132px}.site-brand .partner-brand-logo{width:123px}.site-brand .brand-divider{height:29px}.site-brand .brand-copy strong{font-size:11px}.site-brand .brand-copy small{font-size:9px}}
+@media(max-width:510px){.site-brand{gap:7px}.site-brand .client-brand-logo{width:119px}.site-brand .partner-brand-logo{width:108px}.site-brand .brand-copy strong{font-size:10px}.site-brand .brand-copy small{font-size:9px}.page-hero h1{font-size:22px}}
 
-    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
-        <div class="bg-brastorno-darkBlue p-6 text-center text-white border-b-4 border-brastorno-green">
-            <div class="brand-logos"><img src="./controle_fabrica/brastorno_logo.png" class="customer" alt="Brastorno"><span class="sep"></span><img src="./LOGO.PNG" class="partner" alt="Consultoria.RF"></div><h1 class="text-lg font-extrabold tracking-wide">SISTEMAS BRASTORNO</h1>
-            <p class="text-xs text-brastorno-green font-semibold mt-1">Controle de Fabrica e Inventario</p>
-        </div>
-
-        <form id="loginForm" onsubmit="handleLogin(event)" class="p-6 space-y-4 text-xs">
+body{background:#f4f6fa;color:#1d2a40;font:14px/1.48 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0}
+.login-content{max-width:1500px;margin:auto;padding:24px 24px 50px}
+.login-card{max-width:460px;margin:24px auto 0;background:#fff;border:1px solid #e0e6ee;border-radius:16px;overflow:hidden;box-shadow:0 6px 22px #10234413}
+.login-card-head{background:#f7f9fc;text-align:center;padding:19px 24px 15px;border-bottom:1px solid #e9edf3}
+.login-card-head h2{margin:0;color:#142446;font-size:17px;font-weight:850}
+.login-card-head p{margin:4px 0 0;color:#738198;font-size:11px}
+.login-card form{padding:24px!important;font-size:13px!important}
+.login-card #btnLogin{background:#708e34}.login-card #btnLogin:hover{background:#617b2e}
+@media(max-width:600px){.login-content{padding:16px 12px 30px}.login-card{margin-top:16px}}
+</style></head><body>
+<header class="site-header"><div class="site-head"><div class="site-brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>ACESSO AOS SISTEMAS</strong><small>Controle de Fabrica e Inventario</small></div><span class="brand-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF"></div></div></header>
+<main class="login-content"><div class="page-hero"><div class="page-eyebrow">GESTAO INDUSTRIAL</div><h1>Entrar na Brastorno</h1><p class="page-subtitle">Utilize seu usuario e senha do CPS.</p></div>
+<div class="login-card"><div class="login-card-head"><h2>Identificacao do usuario</h2><p>O menu mostra somente suas aplicacoes autorizadas.</p></div><form id="loginForm" onsubmit="handleLogin(event)" class="p-6 space-y-4 text-xs">
             <div>
                 <label class="block font-bold text-slate-700 mb-1">Usuário:</label>
                 <input type="text" id="inputUsuario" required placeholder="Digite seu usuário..." 
@@ -61,11 +64,8 @@
             <button type="submit" id="btnLogin" class="w-full py-3 bg-brastorno-green text-white font-extrabold rounded-xl hover:bg-brastorno-greenHover transition shadow-md text-xs">
                 Entrar no Sistema
             </button>
-        </form>
-    </div>
-
-    <script>
-        function toggleSenha() {
+        </form></div></main>
+<script>function toggleSenha() {
             const campo = document.getElementById('inputSenha');
             const botao = document.getElementById('btnMostrarSenha');
             const visivel = campo.type === 'password';
@@ -149,6 +149,4 @@
             else m.addedNodes.forEach(converterTextoVisivel);
         })).observe(document.body,{subtree:true,childList:true,characterData:true});
         converterTextoVisivel(document.body);
-    </script>
-</body>
-</html>
+    </script></body></html>
