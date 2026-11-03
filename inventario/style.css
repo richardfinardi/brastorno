@@ -90,3 +90,17 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
 .acoes-remocao input[type=checkbox],.tabela input[data-check-atribuicao]{accent-color:#708e34;width:16px;height:16px}
 #filtroGrupoAtribuido,#filtroUsuarioAtribuido,#statusAtribuicao{min-width:160px}
 @media(max-width:750px){.acoes-remocao{align-items:stretch}.acoes-remocao button{width:100%}}
+
+/* V2.7 - selecao multipla para recontagem */
+.recontagem-toolbar{background:#f7faf4;border:1px solid #d8e6ca;border-radius:12px;padding:15px;margin-bottom:18px}
+.recontagem-cabecalho{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:13px}
+.recontagem-cabecalho strong{font-size:14px;color:#142446}
+#contadorRecontagem{font-size:12px;font-weight:800;color:#617d2d;margin-right:auto}
+.recontagem-campos{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.recontagem-campos .campo{min-width:155px;flex:1 1 155px}
+.recontagem-campos .motivo-recontagem{flex:2 1 220px}
+.recontagem-campos input,.recontagem-campos select{height:40px;min-width:0;width:100%;border:1px solid #dce3eb;border-radius:9px;padding:8px}
+.recontagem-campos button{min-height:40px}
+.recontagem-toolbar .info-suave{margin:9px 0 0}
+[data-recontagem]{width:16px;height:16px;accent-color:#708e34;cursor:pointer}
+@media(max-width:670px){.recontagem-campos .campo{min-width:100%}.recontagem-campos button{width:100%}}
