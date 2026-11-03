@@ -46,3 +46,36 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
 .subgrupos{min-width:125px;max-width:220px}.subgrupos small{white-space:normal}
 @media(max-width:1050px){.campos-filtros{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:630px){.campos-filtros{grid-template-columns:repeat(2,minmax(0,1fr))}.acoes-filtros{flex-wrap:wrap}.acoes-filtros span{max-width:100%}}
+
+
+/* V2.5 | Grupos de contagem, distribuicao, tolerancias, conferencia segregada */
+.config-bloco{padding:17px 0 21px;border-top:1px solid #e0e6ee}
+.config-bloco:first-of-type{margin-top:22px}
+.config-titulo{display:flex;gap:12px;justify-content:space-between;align-items:end;flex-wrap:wrap;margin-bottom:13px}
+.config-titulo h2{font-size:17px;margin:0 0 3px;color:#142446}.config-titulo h3{font-size:14px;color:#142446;margin:0}
+.config-titulo p{font-size:11px;margin:0;color:#738198}
+.config-flex{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:13px}
+.config-flex .campo{min-width:170px;flex:1 1 170px}
+.config-flex .campo-longo{flex:2 1 280px}
+.config-flex input,.config-flex select,.config-flex textarea{width:100%;height:auto;min-height:40px;padding:9px 11px;border-radius:9px;border:1px solid #dce3eb}
+.config-flex textarea{height:64px;resize:vertical}
+.config-flex button{white-space:nowrap;min-height:40px}
+.usuarios-grupo{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 12px}
+.usuario-check{display:flex;align-items:center;gap:7px;background:#f4f6fa;border:1px solid #e0e6ee;border-radius:9px;padding:7px 9px;font-size:12px}
+.usuario-check input{accent-color:#708e34;width:15px;height:15px}
+.info-suave{color:#738198;font-size:11px;line-height:1.5}
+.filtros-suspensos{margin:12px 0;border:1px solid #e0e6ee;border-radius:11px;background:#f9fbfd;padding:11px}
+.filtros-suspensos summary{font-size:12px;font-weight:800;color:#142446;cursor:pointer}
+.filtros-suspensos .campos-filtros{margin-top:13px}
+.chip-tolerancia{background:#e9f0df!important;border-radius:7px;font-weight:800;display:inline-block;margin:4px}
+.segregacao-bloco{border:1px solid #e0e6ee;border-radius:12px;background:#fff;margin-bottom:16px;padding:13px}
+.segregacao-bloco:first-child{border:2px solid #cd6871;background:#fff7f7}
+.segregacao-titulo{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;margin-bottom:9px;color:#142446;font-size:13px}
+.segregacao-bloco:first-child .segregacao-titulo{color:#9d293e}
+.alerta-reserva{font-size:11px;font-weight:700;color:#9d293e;margin:0 0 12px}
+.tag-bloqueio{display:inline-block;background:#fce4e7;border:1px solid #ecc1c6;border-radius:7px;color:#ac334a;font-size:10px;font-weight:900;padding:6px 9px;white-space:nowrap}
+.linha-bloqueada td{background:#fff9f9}.linha-bloqueada:hover td{background:#fff2f2}
+.motivo-bloqueio{font-size:10px;color:#ac334a;font-weight:750;display:block;max-width:230px}
+.ok-tolerancia{color:#4f7928;font-size:11px;font-weight:700}
+.fora-tolerancia{color:#a96620;font-size:11px;font-weight:700}
+@media(max-width:650px){.config-flex{align-items:stretch}.config-flex .campo{flex:1 1 100%}.config-flex button{width:100%}.segregacao-bloco{padding:9px}}
