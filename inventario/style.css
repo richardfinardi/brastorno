@@ -79,3 +79,14 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
 .ok-tolerancia{color:#4f7928;font-size:11px;font-weight:700}
 .fora-tolerancia{color:#a96620;font-size:11px;font-weight:700}
 @media(max-width:650px){.config-flex{align-items:stretch}.config-flex .campo{flex:1 1 100%}.config-flex button{width:100%}.segregacao-bloco{padding:9px}}
+
+/* V2.7 - filtro de atribuicoes + remocao em lote */
+.acoes-remocao{display:flex;flex-wrap:wrap;align-items:center;gap:9px;padding:12px 0 15px}
+.acoes-remocao span:first-child{font-weight:800;color:#203657}
+.acoes-remocao button{font-size:12px;padding:9px 12px}
+.acoes-remocao .botao-perigo{background:#a33b4a;color:#fff;border-color:#a33b4a}
+.acoes-remocao .botao-perigo:hover{background:#862d3b}
+.acoes-remocao .botao-perigo:disabled{background:#f1e6e9;color:#a67c84;border-color:#ebdce0}
+.acoes-remocao input[type=checkbox],.tabela input[data-check-atribuicao]{accent-color:#708e34;width:16px;height:16px}
+#filtroGrupoAtribuido,#filtroUsuarioAtribuido,#statusAtribuicao{min-width:160px}
+@media(max-width:750px){.acoes-remocao{align-items:stretch}.acoes-remocao button{width:100%}}
