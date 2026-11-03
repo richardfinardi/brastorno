@@ -1,6 +1,36 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brastorno | Aplicacoes</title><meta name="robots" content="noindex,nofollow"><link rel="icon" href="./controle_fabrica/favicon.png"><style>
-*{box-sizing:border-box}body{font:14px/1.5 Arial,system-ui,sans-serif;margin:0;background:#f3f6fa;color:#20314c}header{background:#142446;color:white;border-bottom:5px solid #708e34;padding:17px 25px}.barra{max-width:1100px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px}.barra img{width:165px;height:55px;object-fit:contain;background:white;border-radius:8px;padding:4px}.barra button{background:#263b5c;border:1px solid #687c99;color:#fff;padding:9px 12px;border-radius:9px;cursor:pointer}.container{max-width:1100px;margin:40px auto;padding:0 20px}h1{font-size:29px;margin:0 0 5px}.sub{color:#65748c;margin:0 0 30px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:18px}.cartao{display:block;text-decoration:none;color:inherit;background:white;border:1px solid #dde5ef;border-radius:17px;padding:27px;box-shadow:0 5px 18px #1424460a;transition:.15s}.cartao:hover{transform:translateY(-3px);border-color:#708e34}.cartao .icone{background:#e8f1dc;color:#66852b;border-radius:12px;font-size:28px;font-weight:900;padding:10px;display:inline-block;margin-bottom:14px}.cartao h2{margin:0 0 6px;color:#142446}.cartao p{color:#697990;margin:0}.erro{background:#fff0f1;color:#9e2f42;padding:17px;border-radius:12px}.carregando{color:#6d7c91}.usuario{color:#708e34;font-weight:bold}@media(max-width:600px){.container{margin:22px auto}header{padding:12px}.barra img{width:115px;height:42px}h1{font-size:22px}}
-</style></head><body><header><div class="barra"><img src="./controle_fabrica/brastorno_logo.png" alt="Brastorno"><div><span id="usu"></span> <button id="sair">Sair</button></div></div></header><main class="container"><h1>Aplicacoes Brastorno</h1><p class="sub">Selecione a aplicacao autorizada para o seu usuario.</p><div id="cards" class="carregando">Validando permissoes...</div></main><script>
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Aplicacoes | Brastorno</title><link rel="icon" href="./controle_fabrica/favicon.png"><style>
+:root{--navy:#142446;--olive:#708e34;--bg:#f4f6fa;--ink:#1d2a40;--muted:#738198}
+.site-header{background:#142446;color:#fff;border-bottom:5px solid #708e34;box-shadow:0 3px 15px #0c18342b}
+.site-head{max-width:1500px;min-height:115px;padding:17px 24px;margin:auto;display:flex;gap:17px;align-items:center;justify-content:space-between}
+.site-brand{display:flex;gap:17px;align-items:center;min-width:0}
+.site-brand .client-brand-logo{width:184px;max-height:66px;height:auto;object-fit:contain;background:transparent!important;padding:0!important;border:0!important;border-radius:0!important;flex-shrink:0}
+.site-brand .partner-brand-logo{width:188px;max-height:42px;height:auto;object-fit:contain;background:transparent!important;padding:0!important;border:0!important;border-radius:0!important;flex-shrink:0}
+.site-brand .brand-divider{width:1px;height:38px;background:#60708a;flex-shrink:0}
+.site-brand .brand-copy{min-width:0}
+.site-brand .brand-copy strong{font-size:14px;line-height:1.35;font-weight:850;letter-spacing:.04em;display:block;color:#fff;text-transform:uppercase;white-space:nowrap}
+.site-brand .brand-copy small{font-size:11px;color:#b9c7dc;display:block;line-height:1.35;margin-top:3px}
+.site-actions{display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.site-actions .site-action{background:#243758;color:#e6edf6;border:1px solid #50617c;border-radius:10px;font-weight:700;font-size:12px;padding:8px 11px;text-decoration:none;cursor:pointer}
+.site-actions .site-action:hover{background:#365072;color:#fff}
+.page-eyebrow{color:#708e34;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+.page-hero h1{font-size:26px;letter-spacing:-.04em;color:#142446;line-height:1.25;margin:4px 0}
+.page-subtitle{font-size:12px;color:#738198;margin:3px 0}
+@media(max-width:1100px){.site-brand{gap:12px}.site-brand .client-brand-logo{width:155px}.site-brand .partner-brand-logo{width:150px}.site-brand .brand-copy strong{font-size:12px}}
+@media(max-width:760px){.site-head{padding:12px;min-height:0;flex-wrap:wrap;gap:9px}.site-actions{width:100%}.site-brand .client-brand-logo{width:132px}.site-brand .partner-brand-logo{width:123px}.site-brand .brand-divider{height:29px}.site-brand .brand-copy strong{font-size:11px}.site-brand .brand-copy small{font-size:9px}}
+@media(max-width:510px){.site-brand{gap:7px}.site-brand .client-brand-logo{width:119px}.site-brand .partner-brand-logo{width:108px}.site-brand .brand-copy strong{font-size:10px}.site-brand .brand-copy small{font-size:9px}.page-hero h1{font-size:22px}}
+
+body{margin:0;background:#f4f6fa;color:#1d2a40;font:14px/1.48 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.container{max-width:1500px;padding:25px 24px 48px;margin:auto}
+.page-hero{margin-bottom:19px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,355px));gap:15px}
+.cartao{display:block;background:white;border:1px solid #e0e6ee;border-radius:16px;padding:23px;box-shadow:0 3px 12px #21345608;text-decoration:none;color:inherit;transition:transform .12s,border-color .12s}
+.cartao:hover{transform:translateY(-2px);border-color:#708e34}.cartao .icone{display:grid;place-items:center;width:46px;height:46px;border-radius:12px;background:#e9f0df;color:#708e34;font-weight:900;font-size:23px;margin-bottom:13px}
+.cartao h2{font-size:18px;color:#142446;margin:0 0 6px}.cartao p{font-size:12px;color:#738198;margin:0}.carregando{color:#738198}
+.erro{background:#ffeef1;color:#9d263d;padding:20px;border-radius:12px}
+@media(max-width:760px){.container{padding:17px 13px}.cards{grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}}
+</style></head><body>
+<header class="site-header"><div class="site-head"><div class="site-brand"><img class="client-brand-logo" src="./controle_fabrica/brastorno_logo.png" alt="Brastorno"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>APLICACOES BRASTORNO</strong><small>Gestao industrial</small></div><span class="brand-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="./LOGO.PNG" alt="Consultoria.RF"></div><div class="site-actions"><span id="usu" style="font-size:12px;font-weight:800"></span><button class="site-action" id="sair">Sair</button></div></div></header>
+<main class="container"><section class="page-hero"><div class="page-eyebrow">GESTAO INDUSTRIAL</div><h1>Aplicacoes Brastorno</h1><p class="page-subtitle">Selecione a aplicacao autorizada para o seu usuario.</p></section><div id="cards" class="carregando">Validando permissoes...</div></main><script>
 (function(){"use strict";var t=localStorage.getItem("brastorno_token");if(!t){location.href="./login.html";return;}
 document.getElementById("sair").onclick=function(){localStorage.removeItem("brastorno_token");localStorage.removeItem("brastorno_usuario_nome");location.href="./login.html"};
 function e(v){return String(v||"").replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
