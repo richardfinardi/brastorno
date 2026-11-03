@@ -7,6 +7,10 @@ var perfil=null,aba="contagem",empresa=Number(localStorage.getItem("br_invent_em
 var itens=[],rascunhos={},temporizador=null,cabecalhoConsulta=null;
 var camposFiltros=["familia","grupo","subgrupo1","subgrupo2","subgrupo3","subgrupo4","subgrupo5","subgrupo6","subgrupo7","local_estoque"];
 var filtrosAtivos={};var consultaSerial=0;
+// Origem do material: metodo_reposicao 0 = Compras, 1 = Producao propria.
+// Metodo 2 permanece no filtro Todos ate confirmacao do seu significado.
+var metodoReposicao=localStorage.getItem("br_inv_metodo_reposicao")||"";
+if(!["","0","1"].includes(metodoReposicao))metodoReposicao="";
 var equipes=[],usuariosInventario=[];
 var selecaoRecontagem=new Set();
 var contagensRecontagem=[];
@@ -47,6 +51,7 @@ function trocarAba(id){
  ["reservados","contagem","parametrizacoes","conferencia"].forEach(function(x){$(x).hidden=x!==id});
  $("tituloAba").textContent=({"reservados":"Itens reservados","contagem":"Contagem","parametrizacoes":"Parametrizacoes","conferencia":"Conferencia"})[id];
  $("filtros").hidden=false; // Filtros disponiveis nas quatro abas
+ $("blocoFiltroOrigem").hidden=(id==="parametrizacoes");
  $("exportarInventario").hidden=(id!=="reservados");
  aviso("");
  if(id==="parametrizacoes"){carregarConfig();carregarEquipes();carregarFiltros("dist");}
@@ -64,6 +69,8 @@ var filtrosDist={},serieFiltrosDist=0;
 function queryFiltros(escopo,selecionados){
  var modo=escopo==="dist"?"parametrizacoes":aba;
  var q="/brastorno/inventario/filtros?cod_empresa="+empresa+"&modo="+modo;
+ if(escopo==="main"&&aba!=="parametrizacoes"&&metodoReposicao!=="")
+   q+="&metodo_reposicao="+metodoReposicao;
  if(escopo==="main")q+="&busca="+encodeURIComponent($("pesquisa").value.trim());
  camposFiltros.forEach(function(k){
   if(selecionados[k])q+="&"+k+"="+encodeURIComponent(selecionados[k]);
@@ -139,7 +146,17 @@ function aplicarFiltroDist(campo){
  limparDescendentes(campo,filtrosDist,"dist_");
  carregarFiltros("dist");
 }
+function filtrarMetodoReposicao(){
+ metodoReposicao=$("filtroMetodoReposicao").value;
+ localStorage.setItem("br_inv_metodo_reposicao",metodoReposicao);
+ pagina=1;
+ recarregarAba();
+ carregarFiltros("main");
+}
 function limparFiltros(){
+ metodoReposicao="";
+ $("filtroMetodoReposicao").value="";
+ localStorage.removeItem("br_inv_metodo_reposicao");
  filtrosAtivos={};camposFiltros.forEach(function(k){var x=$("filtro_"+k);if(x)x.value=""});
  $("btnFiltro").textContent="Filtros";
  pagina=1;recarregarAba();carregarFiltros("main");
@@ -151,6 +168,7 @@ function recarregarAba(){
 }
 function parametrosFiltros(){
  var q="&busca="+encodeURIComponent($("pesquisa").value.trim());
+ if(aba!=="parametrizacoes"&&metodoReposicao!=="")q+="&metodo_reposicao="+metodoReposicao;
  camposFiltros.forEach(function(k){if(filtrosAtivos[k])q+="&"+k+"="+encodeURIComponent(filtrosAtivos[k])});
  return q;
 }
@@ -674,6 +692,7 @@ window.BRDistribuir=distribuir;
 window.BRCargaAtribuicoes=carregarAtribuicoes;
 window.BRDesatribuir=desatribuir;
 window.BRToleranciaSalvar=toleranciaSalvar;
+window.BRFiltrarMetodoReposicao=filtrarMetodoReposicao;
 window.BRAba=trocarAba;window.BREmpresa=setEmpresa;window.BRPagina=function(delta){pagina=Math.max(1,pagina+delta);carregarItens()};
 window.BRQtd=mudaQuantidade;window.BRLotes=lotes;window.BRAdicionarLote=adicionarLote;window.BRSalvarLotes=salvarLotes;
 window.BRFecharModal=function(){$("modal").hidden=true};window.BREnviar=enviarContagens;window.BRGravarConfig=gravarConfig;
@@ -681,6 +700,7 @@ window.BRDecidir=decidir;window.BRCarregarConferencia=carregarConferencia;window
 $("pesquisa").addEventListener("input",function(){clearTimeout(temporizador);temporizador=setTimeout(function(){pagina=1;recarregarAba();carregarFiltros("main")},350)});
 $("limparBusca").addEventListener("click",function(){$("pesquisa").value="";pagina=1;recarregarAba();carregarFiltros("main")});
 $("empresa").value=empresa;
+$("filtroMetodoReposicao").value=metodoReposicao;
 (async function(){
  try{
   perfil=await api("/brastorno/inventario/perfil");
