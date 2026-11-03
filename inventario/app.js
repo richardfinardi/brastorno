@@ -37,7 +37,8 @@ function trocarAba(id){
  $("acaoContagem").hidden=(id!=="contagem");
  ["reservados","contagem","parametrizacoes","conferencia"].forEach(function(x){$(x).hidden=x!==id});
  $("tituloAba").textContent=({"reservados":"Itens reservados","contagem":"Contagem","parametrizacoes":"Parametrizacoes","conferencia":"Conferencia"})[id];
- $("filtros").hidden=(id==="parametrizacoes"||id==="conferencia");
+ $("filtros").hidden=false; // Filtros disponiveis nas quatro abas
+ $("exportarInventario").hidden=(id!=="reservados");
  aviso("");
  if(id==="parametrizacoes"){carregarConfig();carregarEquipes();}
  else if(id==="conferencia")carregarConferencia();
@@ -80,11 +81,21 @@ function aplicarFiltro(){
  camposFiltros.forEach(function(k){var x=$("filtro_"+k);filtrosAtivos[k]=x?x.value:""});
  var usados=camposFiltros.filter(function(k){return !!filtrosAtivos[k]}).length;
  $("btnFiltro").textContent="Filtros"+(usados?" ("+usados+")":"");
- pagina=1;carregarItens();
+ pagina=1;recarregarAba();
 }
 function limparFiltros(){
  filtrosAtivos={};camposFiltros.forEach(function(k){var x=$("filtro_"+k);if(x)x.value=""});
- $("btnFiltro").textContent="Filtros";pagina=1;carregarItens();
+ $("btnFiltro").textContent="Filtros";pagina=1;recarregarAba();
+}
+function recarregarAba(){
+ if(aba==="conferencia")carregarConferencia();
+ else if(aba==="parametrizacoes")carregarAtribuicoes();
+ else carregarItens();
+}
+function parametrosFiltros(){
+ var q="&busca="+encodeURIComponent($("pesquisa").value.trim());
+ camposFiltros.forEach(function(k){if(filtrosAtivos[k])q+="&"+k+"="+encodeURIComponent(filtrosAtivos[k])});
+ return q;
 }
 function togglePainelFiltros(){
  $("painelFiltros").hidden=!$("painelFiltros").hidden;
@@ -98,9 +109,7 @@ async function carregarItens(){
  try{
   var serial=++consultaSerial;
   var q="/brastorno/inventario/itens?cod_empresa="+empresa+"&pagina="+pagina+"&limite="+limite+
-   "&modo="+(aba==="reservados"?"reservados":"contagem")+
-   "&busca="+encodeURIComponent($("pesquisa").value.trim());
-  camposFiltros.forEach(function(k){if(filtrosAtivos[k])q+="&"+k+"="+encodeURIComponent(filtrosAtivos[k])});
+   "&modo="+(aba==="reservados"?"reservados":"contagem")+parametrosFiltros();
   var d=await api(q);
   if(atual!==aba||serial!==consultaSerial)return;
   itens=d.produtos||[];cabecalhoConsulta=d;
@@ -233,7 +242,7 @@ async function carregarConferencia(){
  $("listaConferencia").innerHTML="<p>Carregando contagens...</p>";
  try{
   var status=$("statusConferencia").value;
-  var d=await api("/brastorno/inventario/contagens?cod_empresa="+empresa+"&status="+status+"&pagina=1&limite=250");
+  var d=await api("/brastorno/inventario/contagens?cod_empresa="+empresa+"&status="+status+"&pagina=1&limite=250"+parametrosFiltros());
   var todas=d.contagens||[];
   var bloqueados=todas.filter(function(r){return r.status==="PENDENTE"&&r.segregado_reserva});
   var regulares=todas.filter(function(r){return !(r.status==="PENDENTE"&&r.segregado_reserva)});
@@ -242,6 +251,7 @@ async function carregarConferencia(){
    rows.forEach(function(r){
     var i=(r.payload&&r.payload.itens||[])[0]||{};
     var qtd=num(i.qtde_inventariada),saldo=num(i.estoque_esperado),dif=qtd-saldo;
+    var unidadeExibida=String(r.unidade||i.unidade_contagem||i.unidade||"").trim().toUpperCase();
     var abaixo=r.status==="PENDENTE"&&r.segregado_reserva;
     var tolerancia=r.tolerancia_percentual;
     var percentual=r.desvio_percentual;
@@ -250,7 +260,7 @@ async function carregarConferencia(){
     var estiloTol=r.dentro_tolerancia?"ok-tolerancia":"fora-tolerancia";
     out+="<tr class='"+(abaixo?"linha-bloqueada":"")+"'><td>"+esc(r.criada_em)+"</td>"+
       "<td><b>"+esc(r.codigo_interno||("#"+r.cod_produto))+"</b><small>"+esc(r.produto)+"</small></td>"+
-      "<td>"+esc(r.usuario)+"</td><td>"+esc(r.unidade||"")+"</td>"+
+       "<td>"+esc(r.usuario)+"</td><td>"+esc(unidadeExibida||"—")+"</td>"+
       "<td class='direita'>"+fmt(saldo)+"</td><td class='direita'>"+fmt(r.qtde_reservada_atual)+"</td>"+
       "<td class='direita'>"+fmt(qtd)+"</td><td class='direita "+(dif<0?"negativo":"")+"'>"+fmt(dif)+"</td>"+
       "<td class='"+estiloTol+"'>"+esc(tolText)+"</td>"+
@@ -378,7 +388,7 @@ async function distribuir(){
 async function carregarAtribuicoes(){
  try{
   var status=$("statusAtribuicao").value;
-  var d=await api("/brastorno/inventario/atribuicoes?cod_empresa="+empresa+"&status="+status+"&limite=120");
+  var d=await api("/brastorno/inventario/atribuicoes?cod_empresa="+empresa+"&status="+status+"&limite=120"+parametrosFiltros());
   var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Usuario / Grupo</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
   (d.atribuicoes||[]).forEach(function(r){
    out+="<tr><td>"+esc(r.codigo_interno||r.cod_produto)+"</td><td>"+esc(r.produto)+"</td>"+
@@ -418,8 +428,8 @@ window.BRAba=trocarAba;window.BREmpresa=setEmpresa;window.BRPagina=function(delt
 window.BRQtd=mudaQuantidade;window.BRLotes=lotes;window.BRAdicionarLote=adicionarLote;window.BRSalvarLotes=salvarLotes;
 window.BRFecharModal=function(){$("modal").hidden=true};window.BREnviar=enviarContagens;window.BRGravarConfig=gravarConfig;
 window.BRDecidir=decidir;window.BRCarregarConferencia=carregarConferencia;window.BRExportar=csvExport;window.BRLogout=logout;
-$("pesquisa").addEventListener("input",function(){clearTimeout(temporizador);temporizador=setTimeout(function(){pagina=1;carregarItens()},350)});
-$("limparBusca").addEventListener("click",function(){$("pesquisa").value="";pagina=1;carregarItens()});
+$("pesquisa").addEventListener("input",function(){clearTimeout(temporizador);temporizador=setTimeout(function(){pagina=1;recarregarAba()},350)});
+$("limparBusca").addEventListener("click",function(){$("pesquisa").value="";pagina=1;recarregarAba()});
 $("empresa").value=empresa;carregarFiltros();
 (async function(){
  try{
