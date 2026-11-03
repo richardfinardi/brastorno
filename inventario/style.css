@@ -104,3 +104,7 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
 .recontagem-toolbar .info-suave{margin:9px 0 0}
 [data-recontagem]{width:16px;height:16px;accent-color:#708e34;cursor:pointer}
 @media(max-width:670px){.recontagem-campos .campo{min-width:100%}.recontagem-campos button{width:100%}}
+
+/* V2.7.1: retorno de validacao de recontagem */
+.erro-recontagem{background:#fff0f1;color:#a52a3f;border:1px solid #e9c3cc;border-radius:9px;padding:11px 13px;font-weight:750;font-size:12px;margin:9px 0;line-height:1.5}
+.erro-recontagem[hidden]{display:none!important}
