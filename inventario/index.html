@@ -56,5 +56,18 @@
  <p class="info-suave">Exemplos: KG = 5%, MM = 10%, PC = 0%. Valores so valem apos serem salvos.</p>
  <div id="listaTolerancias">Nenhuma tolerancia configurada.</div>
 </div></section>
-<section id="conferencia" class="painel" hidden><div class="subtop"><h2>Contagens recebidas</h2><select id="statusConferencia" onchange="BRCarregarConferencia()"><option value="PENDENTE">Pendentes</option><option value="APLICADA">Aplicadas</option><option value="REJEITADA">Rejeitadas</option><option value="TODOS">Todas</option></select></div><div id="listaConferencia"></div></section>
+<section id="conferencia" class="painel" hidden>
+<div class="subtop"><h2>Contagens recebidas</h2><select id="statusConferencia" onchange="BRCarregarConferencia()"><option value="PENDENTE">Pendentes</option><option value="APLICADA">Aplicadas</option><option value="REJEITADA">Rejeitadas</option><option value="RECONTAGEM_SOLICITADA">Recontagens solicitadas</option><option value="TODOS">Todas</option></select></div>
+<div class="recontagem-toolbar">
+ <div class="recontagem-cabecalho"><strong>Solicitar recontagem</strong><span id="contadorRecontagem">0 item(ns) selecionado(s)</span><button type="button" class="mini" onclick="BRSelecionarTodasRecontagens()">Selecionar todos da tela</button><button type="button" class="mini" onclick="BRLimparRecontagem()">Desmarcar</button></div>
+ <div class="recontagem-campos">
+  <div class="campo"><label>ENCAMINHAR PARA</label><select id="tipoDestinoRecontagem" onchange="BRDestinoRecontagem()"><option value="usuario">Pessoa</option><option value="grupo">Grupo de contagem</option></select></div>
+  <div class="campo" id="pessoaRecontagemBloco"><label>USUARIO</label><select id="pessoaRecontagem"><option value="">Selecione...</option></select></div>
+  <div class="campo" id="grupoRecontagemBloco" hidden><label>GRUPO</label><select id="grupoRecontagem"><option value="">Selecione...</option></select></div>
+  <div class="campo motivo-recontagem"><label>MOTIVO / OBSERVACAO (OPCIONAL)</label><input id="motivoRecontagem" maxlength="500" placeholder="Ex.: Recontagem independente"></div>
+  <button type="button" id="btnSolicitarRecontagem" class="destaque" onclick="BRSolicitarRecontagem()" disabled>Enviar para recontagem</button>
+ </div>
+ <p class="info-suave">Selecione uma ou varias contagens pendentes ou aplicadas. O estoque CPS nao sera alterado ao solicitar recontagem.</p>
+</div>
+<div id="listaConferencia"></div></section>
 </main><div id="modal" hidden></div><script src="./app.js"></script></body></html>
