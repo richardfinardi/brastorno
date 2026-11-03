@@ -97,6 +97,7 @@ async function carregarItens(){
  $("resumoContagem").textContent=fmt(d.total)+" materiais | Empresa "+empresa+" | Deposito 1";
   if(aba==="reservados")montarReservados();
   else montarContagem();
+  $("exportarInventario").hidden=(aba==="contagem");
   $("paginacao").innerHTML="<span>Pagina "+pagina+" | "+fmt(d.total)+" registros</span>"+
    "<button "+(pagina<=1?"disabled":"")+" onclick='BRPagina(-1)'>Anterior</button>"+
    "<button "+(!d.tem_mais?"disabled":"")+" onclick='BRPagina(1)'>Proxima</button>";
@@ -116,12 +117,13 @@ function rowsBase(p){return "<td><b>"+esc(p.codigo_interno||p.cod_produto)+"</b>
 }
 function osChips(p){
  var rr=p.reservas_os||[];
- if(!rr.length)return p.tem_reserva?"<span class='chip alerta'>Reserva ativa</span>":"";
+ if(num(p.qtde_reservada)<=0)return ""; if(!rr.length)return "<span class='chip alerta'>Reserva registrada, sem OS identificada</span>";
  return rr.map(function(r){return "<span class='chip'>"+(r.n_os?"OS "+esc(r.n_os):"OS nao identificada")+
   " | "+fmt(r.qtde)+(r.descricao?" | "+esc(r.descricao):"")+"</span>"}).join("");
 }
 function montarReservados(){
  $("acaoContagem").hidden=true;
+ itens=itens.filter(function(p){return num(p.qtde_reservada)>0});
  var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Familia</th><th>Grupo</th><th>Subgrupos 1 a 7</th><th>Unid.</th><th>Local de estoque</th><th>Saldo CPS</th><th>Reservado</th><th>OS / Origem da reserva</th><th>Solicitada reservada</th></tr></thead><tbody>";
  itens.forEach(function(p){out+="<tr>"+rowsBase(p)+"<td class='direita'>"+fmt(p.qtde_total)+"</td>"+
   "<td class='direita'>"+fmt(p.qtde_reservada)+"</td><td>"+osChips(p)+"</td><td class='direita'>"+fmt(p.qtde_solicitada_reservada)+"</td></tr>"});
