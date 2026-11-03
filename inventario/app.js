@@ -1,0 +1,227 @@
+(function(){
+"use strict";
+var API="https://brastorno.consultoriarf.net";
+var TOKEN=localStorage.getItem("brastorno_token");
+if(!TOKEN){location.replace("../login.html");return;}
+var perfil=null,aba="contagem",empresa=Number(localStorage.getItem("br_invent_empresa")||1),pagina=1,limite=75;
+var itens=[],rascunhos={},temporizador=null,cabecalhoConsulta=null;
+var $=function(id){return document.getElementById(id)};
+function esc(s){return String(s===null||s===undefined?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function puro(v){return String(v===null||v===undefined?"":v).normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
+function num(v){return Number(String(v===null||v===undefined?0:v).replace(",","."))||0}
+function fmt(v){return num(v).toLocaleString("pt-BR",{maximumFractionDigits:4})}
+function moeda(v){return num(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
+function aviso(s,erro){$("aviso").textContent=s;$("aviso").className="aviso"+(erro?" erro":"")}
+function erroMsg(e){return (e&&e.message)||String(e)}
+async function api(caminho,metodo,body){
+ var t=localStorage.getItem("brastorno_token");
+ if(!t){location.href="../login.html";throw Error("Sessao encerrada.")}
+ var opt={method:metodo||"GET",headers:{"Authorization":"Bearer "+t,"Accept":"application/json"},cache:"no-store"};
+ if(body!==undefined){opt.headers["Content-Type"]="application/json";opt.body=JSON.stringify(body)}
+ var r=await fetch(API+caminho,opt),val=null;
+ try{val=await r.json()}catch(e){}
+ if(r.status===401){localStorage.removeItem("brastorno_token");location.href="../login.html";throw Error("Sessao expirada.")}
+ if(!r.ok)throw Error((val&&val.detail)||"Erro HTTP "+r.status);
+ return val;
+}
+function isGestor(){return perfil&&perfil.inventario_gestor}
+function trocarAba(id){
+ if(id!=="contagem"&&!isGestor())return;
+ aba=id;pagina=1;localStorage.setItem("br_invent_aba",id);
+ document.querySelectorAll("[data-aba]").forEach(function(x){x.classList.toggle("ativa",x.getAttribute("data-aba")===id)});
+ ["reservados","contagem","parametrizacoes","conferencia"].forEach(function(x){$(x).hidden=x!==id});
+ $("tituloAba").textContent=({"reservados":"Itens reservados","contagem":"Contagem","parametrizacoes":"Parametrizacoes","conferencia":"Conferencia"})[id];
+ $("filtros").hidden=(id==="parametrizacoes"||id==="conferencia");
+ aviso("");
+ if(id==="parametrizacoes")carregarConfig();
+ else if(id==="conferencia")carregarConferencia();
+ else carregarItens();
+}
+function setEmpresa(v){empresa=Number(v)||1;pagina=1;rascunhos={};localStorage.setItem("br_invent_empresa",empresa);trocarAba(aba)}
+async function carregarItens(){
+ var atual=aba;
+ $("lista").innerHTML="<div class='carregando'>Carregando materiais...</div>";
+ $("paginacao").innerHTML="";
+ try{
+  var q="/brastorno/inventario/itens?cod_empresa="+empresa+"&pagina="+pagina+"&limite="+limite+
+   "&busca="+encodeURIComponent($("pesquisa").value.trim())+"&somente_reservados="+(aba==="reservados"?"true":"false");
+  var d=await api(q);
+  if(atual!==aba)return;
+  itens=d.produtos||[];cabecalhoConsulta=d;
+  $("resumo").textContent=fmt(d.total)+" materiais | Empresa "+empresa+" | Deposito 1";
+  if(aba==="reservados")montarReservados();
+  else montarContagem();
+  $("paginacao").innerHTML="<span>Pagina "+pagina+" | "+fmt(d.total)+" registros</span>"+
+   "<button "+(pagina<=1?"disabled":"")+" onclick='BRPagina(-1)'>Anterior</button>"+
+   "<button "+(!d.tem_mais?"disabled":"")+" onclick='BRPagina(1)'>Proxima</button>";
+ }catch(e){$("lista").innerHTML="<div class='erro-caixa'>"+esc(erroMsg(e))+"</div>";aviso(erroMsg(e),true)}
+}
+function local(p){
+ var a=String(p.u_localizacao||"").trim(),b=String(p.localizacao_estoque||"").trim();
+ return (a&&b&&a!==b)?a+" / "+b:(a||b||"");
+}
+function rowsBase(p){return "<td><b>"+esc(p.codigo_interno||p.cod_produto)+"</b><small>#"+esc(p.cod_produto)+"</small></td>"+
+ "<td class='produto'>"+esc(p.produto)+"</td><td>"+esc(p.unidade||"")+"</td><td>"+esc(local(p))+"</td>"+
+ "<td class='direita'>"+fmt(p.qtde_total)+"</td><td class='direita'>"+fmt(p.qtde_reservada)+"</td>";
+}
+function osChips(p){
+ var rr=p.reservas_os||[];
+ if(!rr.length)return p.tem_reserva?"<span class='chip alerta'>Reserva sem OS identificada</span>":"";
+ return rr.map(function(r){return "<span class='chip'>"+(r.n_os?"OS "+esc(r.n_os):"OS nao identificada")+
+  " | "+fmt(r.qtde)+(r.descricao?" | "+esc(r.descricao):"")+"</span>"}).join("");
+}
+function montarReservados(){
+ $("acaoContagem").hidden=true;
+ var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Unid.</th><th>Local de estoque</th><th>Saldo CPS</th><th>Reservado</th><th>OS / Origem da reserva</th><th>Solicitada reservada</th></tr></thead><tbody>";
+ itens.forEach(function(p){out+="<tr>"+rowsBase(p)+"<td>"+osChips(p)+"</td><td class='direita'>"+fmt(p.qtde_solicitada_reservada)+"</td></tr>"});
+ $("lista").innerHTML=out+(itens.length?"":"<tr><td colspan='8'>Nenhuma reserva localizada.</td></tr>")+"</tbody></table></div>";
+}
+function mudaQuantidade(cod,v){
+ if(v===""){delete rascunhos[cod];atualizaSelecionados();return}
+ var n=Number(v);
+ if(!Number.isFinite(n)||n<0){aviso("Informe quantidade valida.",true);return}
+ rascunhos[cod]={qtde:n,lotes:null};atualizaSelecionados();
+}
+function atualizaSelecionados(){
+ var c=Object.keys(rascunhos).length;
+ $("quantidadeDigitada").textContent=c+" material(is) para enviar";
+}
+function montarContagem(){
+ $("acaoContagem").hidden=false;
+ var gestor=isGestor();
+ var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Unid.</th><th>Local de estoque</th><th>Saldo CPS</th><th>Reservado</th>";
+ if(gestor)out+="<th>Preco custo</th><th>Custo fiscal</th>";
+ out+="<th>Contagem fisica</th><th>Lotes / Series</th><th>Reserva em OS</th></tr></thead><tbody>";
+ itens.forEach(function(p){
+  var cod=p.cod_produto,lote=[1,2,3].includes(Number(p.tipo_controle)),d=rascunhos[cod];
+  out+="<tr>"+rowsBase(p);
+  if(gestor)out+="<td class='direita'>"+moeda(p.preco_custo)+"</td><td class='direita'>"+moeda(p.preco_custo_fiscal)+"</td>";
+  out+="<td>"+(lote?"<span class='contagem-valor'>"+(d?fmt(d.qtde):"Contar lotes")+"</span>":
+     "<input class='qtd' type='number' step='any' min='0' placeholder='Qtd.' value='"+(d?esc(d.qtde):"")+
+     "' oninput='BRQtd("+cod+",this.value)'>")+"</td>";
+  out+="<td>"+(lote?"<button class='mini' onclick='BRLotes("+cod+")'>Informar lotes</button>":"")+
+    (p.lotes&&p.lotes.length?"<small>"+p.lotes.length+" lote(s)</small>":"")+"</td>";
+  out+="<td>"+(p.tem_reserva?osChips(p):"")+"</td></tr>";
+ });
+ var col=gestor?11:9;
+ $("lista").innerHTML=out+(itens.length?"":"<tr><td colspan='"+col+"'>Nenhum material encontrado.</td></tr>")+"</tbody></table></div>";
+ atualizaSelecionados();
+}
+function lotes(cod){
+ var p=itens.find(function(x){return Number(x.cod_produto)===Number(cod)});
+ if(!p)return;
+ var d=rascunhos[cod]||{},lista=d.lotes||p.lotes||[];
+ var out="<div class='modal-bloco'><h2>Lotes / Series</h2><p>"+esc(p.codigo_interno)+" | "+esc(p.produto)+"</p>"+
+  "<p>Informe a quantidade fisica de cada lote, inclusive zero.</p>"+
+  "<div id='linhasLote'>";
+ lista.forEach(function(l){out+=linhaLote(l.nome,l.qtde)});
+ out+="</div><button class='mini' onclick='BRAdicionarLote()'>+ Novo lote</button>"+
+  "<div class='modal-botoes'><button onclick='BRFecharModal()'>Cancelar</button><button class='destaque' onclick='BRSalvarLotes("+cod+")'>Salvar contagem</button></div></div>";
+ $("modal").innerHTML=out;$("modal").hidden=false;
+}
+function linhaLote(nome,qtd){return "<div class='linha-lote'><input class='nome-lote' placeholder='Lote / Serie' value='"+esc(nome)+"'>"+
+ "<input class='qtd-lote' type='number' min='0' step='any' placeholder='Qtd.' value='"+esc(qtd===null||qtd===undefined?0:qtd)+"'></div>"}
+function adicionarLote(){$("linhasLote").insertAdjacentHTML("beforeend",linhaLote("",0))}
+function salvarLotes(cod){
+ var rows=Array.from(document.querySelectorAll(".linha-lote")),ls=[],vistos={};
+ for(var i=0;i<rows.length;i++){
+  var nome=rows[i].querySelector(".nome-lote").value.trim(),q=Number(rows[i].querySelector(".qtd-lote").value);
+  if(!nome||!Number.isFinite(q)||q<0){aviso("Lote e quantidade invalidos.",true);return}
+  if(vistos[nome.toUpperCase()]){aviso("Lote repetido.",true);return}
+  vistos[nome.toUpperCase()]=1;ls.push({nome:nome,qtde:q});
+ }
+ if(!ls.length){aviso("Informe ao menos um lote.",true);return}
+ rascunhos[cod]={qtde:ls.reduce(function(a,x){return a+x.qtde},0),lotes:ls};
+ $("modal").hidden=true;montarContagem();aviso("Lotes registrados na contagem.");
+}
+async function enviarContagens(){
+ var selecionados=itens.filter(function(p){return Object.prototype.hasOwnProperty.call(rascunhos,p.cod_produto)});
+ if(!selecionados.length){aviso("Informe ao menos uma contagem na pagina.",true);return}
+ var payload={cod_empresa:empresa,itens:selecionados.map(function(p){
+  var d=rascunhos[p.cod_produto];
+  return {cod_produto:p.cod_produto,estoque_esperado:p.qtde_total,
+          qtde_inventariada:d.qtde,versao:p.versao,lotes:d.lotes};
+ })};
+ if(!confirm("Enviar "+payload.itens.length+" contagem(ns) para conferencia? O estoque nao sera alterado agora."))return;
+ try{
+  $("btnEnviar").disabled=true;
+  var r=await api("/brastorno/inventario/contagens","POST",payload);
+  selecionados.forEach(function(p){delete rascunhos[p.cod_produto]});
+  aviso(r.quantidade+" contagem(ns) enviadas para conferencia.");
+  await carregarItens();
+ }catch(e){aviso(erroMsg(e),true)}
+ finally{$("btnEnviar").disabled=false}
+}
+async function carregarConfig(){
+ $("formConfig").innerHTML="<p>Carregando configuracoes...</p>";
+ try{
+  var c=await api("/brastorno/inventario/config?cod_empresa="+empresa);
+  $("formConfig").innerHTML="<label class='check'><input id='cfgAtivos' type='checkbox' "+(c.somente_ativos?"checked":"")+"> Somente materiais ativos</label>"+
+   "<label class='check'><input id='cfgMetodo' type='checkbox' "+(c.metodo_zero?"checked":"")+"> Somente metodo de reposicao 0</label>"+
+   "<p>Desmarque o segundo filtro para incluir todos os metodos, inclusive produtos acabados.</p>"+
+   "<button class='destaque' onclick='BRGravarConfig()'>Salvar parametrizacoes</button>";
+ }catch(e){$("formConfig").textContent=erroMsg(e)}
+}
+async function gravarConfig(){
+ try{
+  await api("/brastorno/inventario/config","POST",{cod_empresa:empresa,somente_ativos:$("cfgAtivos").checked,metodo_zero:$("cfgMetodo").checked});
+  aviso("Parametrizacoes salvas para empresa "+empresa+".");
+ }catch(e){aviso(erroMsg(e),true)}
+}
+async function carregarConferencia(){
+ $("listaConferencia").innerHTML="<p>Carregando contagens...</p>";
+ try{
+  var s=$("statusConferencia").value,d=await api("/brastorno/inventario/contagens?cod_empresa="+empresa+"&status="+s+"&pagina=1&limite=200");
+  var out="<div class='tabela'><table><thead><tr><th>Data</th><th>Produto</th><th>Contador</th><th>Saldo CPS na contagem</th><th>Contado</th><th>Diferenca</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
+  (d.contagens||[]).forEach(function(r){
+   var i=r.payload.itens[0],dif=num(i.qtde_inventariada)-num(i.estoque_esperado);
+   out+="<tr><td>"+esc(r.criada_em)+"</td><td>#"+esc(r.cod_produto)+"</td><td>"+esc(r.usuario)+"</td>"+
+    "<td class='direita'>"+fmt(i.estoque_esperado)+"</td><td class='direita'>"+fmt(i.qtde_inventariada)+"</td>"+
+    "<td class='direita "+(dif<0?"negativo":"")+"'>"+fmt(dif)+"</td><td>"+esc(r.status)+"</td>"+
+    "<td>"+(r.status==="PENDENTE"?"<button class='mini destaque' onclick='BRDecidir(\""+esc(r.id)+"\",true)'>Aplicar no CPS</button>"+
+        "<button class='mini' onclick='BRDecidir(\""+esc(r.id)+"\",false)'>Rejeitar</button>":"")+"</td></tr>";
+  });
+  $("listaConferencia").innerHTML=out+(!d.contagens.length?"<tr><td colspan='8'>Sem contagens neste status.</td></tr>":"")+"</tbody></table></div>"+
+    "<p>"+fmt(d.total)+" registro(s). Exibindo ate 200 mais recentes.</p>";
+ }catch(e){$("listaConferencia").innerHTML="<div class='erro-caixa'>"+esc(erroMsg(e))+"</div>";aviso(erroMsg(e),true)}
+}
+async function decidir(id,aplicar){
+ if(!confirm(aplicar?"CONFIRMAR GRAVACAO REAL NO CPS? O estoque sera ajustado e registrado no Kardex.":"Rejeitar esta contagem?"))return;
+ try{
+  var acao=aplicar?"aplicar":"rejeitar";
+  await api("/brastorno/inventario/conferencias/"+encodeURIComponent(id)+"/"+acao+"?cod_empresa="+empresa,"POST",{});
+  aviso(aplicar?"Conferencia aplicada no CPS.":"Contagem rejeitada.");
+  carregarConferencia();
+ }catch(e){aviso(erroMsg(e),true)}
+}
+function csvExport(){
+ var linhas=[["Empresa","Codigo","Produto","Unidade","Local","Saldo","Reservado","Preco Custo","Custo Fiscal","OS"]];
+ itens.forEach(function(p){linhas.push([empresa,p.codigo_interno,p.produto,p.unidade,local(p),p.qtde_total,p.qtde_reservada,p.preco_custo,p.preco_custo_fiscal,
+  (p.reservas_os||[]).map(function(r){return r.n_os||"SEM OS"}).join("; ")])});
+ var csv="\ufeff"+linhas.map(function(row){return row.map(function(c){return '"'+String(c===null||c===undefined?"":c).replace(/"/g,'""')+'"'}).join(";")}).join("\r\n");
+ var a=document.createElement("a"),url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));
+ a.href=url;a.download="BRASTORNO_INVENTARIO_EMPRESA_"+empresa+".csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+function logout(){localStorage.removeItem("brastorno_token");localStorage.removeItem("brastorno_usuario_nome");location.href="../login.html"}
+window.BRAba=trocarAba;window.BREmpresa=setEmpresa;window.BRPagina=function(delta){pagina=Math.max(1,pagina+delta);carregarItens()};
+window.BRQtd=mudaQuantidade;window.BRLotes=lotes;window.BRAdicionarLote=adicionarLote;window.BRSalvarLotes=salvarLotes;
+window.BRFecharModal=function(){$("modal").hidden=true};window.BREnviar=enviarContagens;window.BRGravarConfig=gravarConfig;
+window.BRDecidir=decidir;window.BRCarregarConferencia=carregarConferencia;window.BRExportar=csvExport;window.BRLogout=logout;
+$("pesquisa").addEventListener("input",function(){clearTimeout(temporizador);temporizador=setTimeout(function(){pagina=1;carregarItens()},350)});
+$("limparBusca").addEventListener("click",function(){$("pesquisa").value="";pagina=1;carregarItens()});
+$("empresa").value=empresa;
+(async function(){
+ try{
+  perfil=await api("/brastorno/inventario/perfil");
+  if(!perfil.inventario)throw Error("Usuario sem liberacao de inventario.");
+  $("usuario").textContent=puro(perfil.usuario);
+  if(!perfil.inventario_gestor){
+   document.querySelectorAll("[data-gestor]").forEach(function(x){x.hidden=true});
+  }
+  var inicial=localStorage.getItem("br_invent_aba")||"contagem";
+  if(!perfil.inventario_gestor)inicial="contagem";
+  trocarAba(inicial);
+ }catch(e){$("corpo").innerHTML="<div class='erro-caixa'>"+esc(erroMsg(e))+
+  "<br>Verifique a instalacao da API WEB e as permissoes CSENHA U_INVENT / U_INVENT_GESTOR.</div>";}
+})();
+})();
