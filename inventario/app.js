@@ -29,6 +29,9 @@ function trocarAba(id){
  if(id!=="contagem"&&!isGestor())return;
  aba=id;pagina=1;localStorage.setItem("br_invent_aba",id);
  document.querySelectorAll("[data-aba]").forEach(function(x){x.classList.toggle("ativa",x.getAttribute("data-aba")===id)});
+ $("lista").hidden=(id==="parametrizacoes"||id==="conferencia");
+ $("paginacao").hidden=(id==="parametrizacoes"||id==="conferencia");
+ $("acaoContagem").hidden=(id!=="contagem");
  ["reservados","contagem","parametrizacoes","conferencia"].forEach(function(x){$(x).hidden=x!==id});
  $("tituloAba").textContent=({"reservados":"Itens reservados","contagem":"Contagem","parametrizacoes":"Parametrizacoes","conferencia":"Conferencia"})[id];
  $("filtros").hidden=(id==="parametrizacoes"||id==="conferencia");
@@ -49,6 +52,7 @@ async function carregarItens(){
   if(atual!==aba)return;
   itens=d.produtos||[];cabecalhoConsulta=d;
   $("resumo").textContent=fmt(d.total)+" materiais | Empresa "+empresa+" | Deposito 1";
+ $("resumoContagem").textContent=fmt(d.total)+" materiais | Empresa "+empresa+" | Deposito 1";
   if(aba==="reservados")montarReservados();
   else montarContagem();
   $("paginacao").innerHTML="<span>Pagina "+pagina+" | "+fmt(d.total)+" registros</span>"+
