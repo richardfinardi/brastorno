@@ -5,6 +5,8 @@ var TOKEN=localStorage.getItem("brastorno_token");
 if(!TOKEN){location.replace("../login.html");return;}
 var perfil=null,aba="contagem",empresa=Number(localStorage.getItem("br_invent_empresa")||1),pagina=1,limite=75;
 var itens=[],rascunhos={},temporizador=null,cabecalhoConsulta=null;
+var camposFiltros=["familia","grupo","subgrupo1","subgrupo2","subgrupo3","subgrupo4","subgrupo5","subgrupo6","subgrupo7","local_estoque"];
+var filtrosAtivos={};var consultaSerial=0;
 var $=function(id){return document.getElementById(id)};
 function esc(s){return String(s===null||s===undefined?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function puro(v){return String(v===null||v===undefined?"":v).normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
@@ -40,16 +42,56 @@ function trocarAba(id){
  else if(id==="conferencia")carregarConferencia();
  else carregarItens();
 }
-function setEmpresa(v){empresa=Number(v)||1;pagina=1;rascunhos={};localStorage.setItem("br_invent_empresa",empresa);trocarAba(aba)}
+function setEmpresa(v){
+ empresa=Number(v)||1;pagina=1;rascunhos={};filtrosAtivos={};
+ localStorage.setItem("br_invent_empresa",empresa);
+ camposFiltros.forEach(function(k){var el=$("filtro_"+k);if(el)el.value=""});
+ carregarFiltros();trocarAba(aba)
+}
+async function carregarFiltros(){
+ var empresaInicio=empresa;
+ $("msgFiltros").textContent="Carregando opcoes...";
+ try{
+  var resultado=await api("/brastorno/inventario/filtros?cod_empresa="+empresaInicio);
+  if(empresaInicio!==empresa)return;
+  camposFiltros.forEach(function(k){
+   var select=$("filtro_"+k),valor=String(filtrosAtivos[k]||"");
+   if(!select)return;
+   select.innerHTML="<option value=''>Todos</option>";
+   (resultado.filtros[k]||[]).forEach(function(v){
+    var opt=document.createElement("option");opt.value=v;opt.textContent=puro(v);select.add(opt);
+   });
+   select.value=valor;
+  });
+  $("msgFiltros").textContent="Familia, grupo, subgrupos 1 a 7 e local de estoque";
+ }catch(e){$("msgFiltros").textContent="Nao foi possivel carregar os filtros: "+erroMsg(e)}
+}
+function aplicarFiltro(){
+ camposFiltros.forEach(function(k){var x=$("filtro_"+k);filtrosAtivos[k]=x?x.value:""});
+ var usados=camposFiltros.filter(function(k){return !!filtrosAtivos[k]}).length;
+ $("btnFiltro").textContent="Filtros"+(usados?" ("+usados+")":"");
+ pagina=1;carregarItens();
+}
+function limparFiltros(){
+ filtrosAtivos={};camposFiltros.forEach(function(k){var x=$("filtro_"+k);if(x)x.value=""});
+ $("btnFiltro").textContent="Filtros";pagina=1;carregarItens();
+}
+function togglePainelFiltros(){
+ $("painelFiltros").hidden=!$("painelFiltros").hidden;
+}
+
 async function carregarItens(){
  var atual=aba;
  $("lista").innerHTML="<div class='carregando'>Carregando materiais...</div>";
  $("paginacao").innerHTML="";
  try{
+  var serial=++consultaSerial;
   var q="/brastorno/inventario/itens?cod_empresa="+empresa+"&pagina="+pagina+"&limite="+limite+
-   "&busca="+encodeURIComponent($("pesquisa").value.trim())+"&somente_reservados="+(aba==="reservados"?"true":"false");
+   "&modo="+(aba==="reservados"?"reservados":"contagem")+
+   "&busca="+encodeURIComponent($("pesquisa").value.trim());
+  camposFiltros.forEach(function(k){if(filtrosAtivos[k])q+="&"+k+"="+encodeURIComponent(filtrosAtivos[k])});
   var d=await api(q);
-  if(atual!==aba)return;
+  if(atual!==aba||serial!==consultaSerial)return;
   itens=d.produtos||[];cabecalhoConsulta=d;
   $("resumo").textContent=fmt(d.total)+" materiais | Empresa "+empresa+" | Deposito 1";
  $("resumoContagem").textContent=fmt(d.total)+" materiais | Empresa "+empresa+" | Deposito 1";
@@ -64,9 +106,13 @@ function local(p){
  var a=String(p.u_localizacao||"").trim(),b=String(p.localizacao_estoque||"").trim();
  return (a&&b&&a!==b)?a+" / "+b:(a||b||"");
 }
+function subgrupos(p){
+ var partes=[];for(var i=1;i<=7;i++){var v=p["subgrupo"+i];if(v)partes.push("<small><b>"+i+":</b> "+esc(v)+"</small>")}
+ return partes.join("")||"";
+}
 function rowsBase(p){return "<td><b>"+esc(p.codigo_interno||p.cod_produto)+"</b><small>#"+esc(p.cod_produto)+"</small></td>"+
- "<td class='produto'>"+esc(p.produto)+"</td><td>"+esc(p.unidade||"")+"</td><td>"+esc(local(p))+"</td>"+
- "<td class='direita'>"+fmt(p.qtde_total)+"</td><td class='direita'>"+fmt(p.qtde_reservada)+"</td>";
+ "<td class='produto'>"+esc(p.produto)+"</td><td>"+esc(p.familia||"")+"</td><td>"+esc(p.grupo||"")+"</td>"+
+ "<td class='subgrupos'>"+subgrupos(p)+"</td><td>"+esc(p.unidade||"")+"</td><td>"+esc(local(p))+"</td>";
 }
 function osChips(p){
  var rr=p.reservas_os||[];
@@ -76,9 +122,10 @@ function osChips(p){
 }
 function montarReservados(){
  $("acaoContagem").hidden=true;
- var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Unid.</th><th>Local de estoque</th><th>Saldo CPS</th><th>Reservado</th><th>OS / Origem da reserva</th><th>Solicitada reservada</th></tr></thead><tbody>";
- itens.forEach(function(p){out+="<tr>"+rowsBase(p)+"<td>"+osChips(p)+"</td><td class='direita'>"+fmt(p.qtde_solicitada_reservada)+"</td></tr>"});
- $("lista").innerHTML=out+(itens.length?"":"<tr><td colspan='8'>Nenhuma reserva localizada.</td></tr>")+"</tbody></table></div>";
+ var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Familia</th><th>Grupo</th><th>Subgrupos 1 a 7</th><th>Unid.</th><th>Local de estoque</th><th>Saldo CPS</th><th>Reservado</th><th>OS / Origem da reserva</th><th>Solicitada reservada</th></tr></thead><tbody>";
+ itens.forEach(function(p){out+="<tr>"+rowsBase(p)+"<td class='direita'>"+fmt(p.qtde_total)+"</td>"+
+  "<td class='direita'>"+fmt(p.qtde_reservada)+"</td><td>"+osChips(p)+"</td><td class='direita'>"+fmt(p.qtde_solicitada_reservada)+"</td></tr>"});
+ $("lista").innerHTML=out+(itens.length?"":"<tr><td colspan='11'>Nenhuma reserva localizada.</td></tr>")+"</tbody></table></div>";
 }
 function mudaQuantidade(cod,v){
  if(v===""){delete rascunhos[cod];atualizaSelecionados();return}
@@ -88,27 +135,21 @@ function mudaQuantidade(cod,v){
 }
 function atualizaSelecionados(){
  var c=Object.keys(rascunhos).length;
- $("quantidadeDigitada").textContent=c+" material(is) para enviar";
+ $("quantidadeDigitada").textContent=c+" contagem(ns) preenchida(s) - enviar itens desta pagina";
 }
 function montarContagem(){
  $("acaoContagem").hidden=false;
- var gestor=isGestor();
- var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Unid.</th><th>Local de estoque</th><th>Saldo CPS</th><th>Reservado</th>";
- if(gestor)out+="<th>Preco custo</th><th>Custo fiscal</th>";
- out+="<th>Contagem fisica</th><th>Lotes / Series</th><th>Reserva em OS</th></tr></thead><tbody>";
+ var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Familia</th><th>Grupo</th><th>Subgrupos 1 a 7</th><th>Unid.</th><th>Local de estoque</th><th>Contagem fisica</th><th>Lotes / Series</th></tr></thead><tbody>";
  itens.forEach(function(p){
   var cod=p.cod_produto,lote=[1,2,3].includes(Number(p.tipo_controle)),d=rascunhos[cod];
   out+="<tr>"+rowsBase(p);
-  if(gestor)out+="<td class='direita'>"+moeda(p.preco_custo)+"</td><td class='direita'>"+moeda(p.preco_custo_fiscal)+"</td>";
-  out+="<td>"+(lote?"<span class='contagem-valor'>"+(d?fmt(d.qtde):"Contar lotes")+"</span>":
-     "<input class='qtd' type='number' step='any' min='0' placeholder='Qtd.' value='"+(d?esc(d.qtde):"")+
-     "' oninput='BRQtd("+cod+",this.value)'>")+"</td>";
-  out+="<td>"+(lote?"<button class='mini' onclick='BRLotes("+cod+")'>Informar lotes</button>":"")+
-    (p.lotes&&p.lotes.length?"<small>"+p.lotes.length+" lote(s)</small>":"")+"</td>";
-  out+="<td>"+(p.tem_reserva?osChips(p):"")+"</td></tr>";
+  out+="<td>"+(lote?"<span class='contagem-valor'>"+(d?fmt(d.qtde):"Nao contada")+"</span>":
+     "<input class='qtd' type='number' step='any' min='0' placeholder='Contar...' value='"+(d?esc(d.qtde):"")+
+     "' oninput='BRQtd("+cod+",this.value)' autocomplete='off'>")+"</td>";
+  out+="<td>"+(lote?"<button class='mini' onclick='BRLotes("+cod+")'>Contar lotes</button>":"")+
+    (p.lotes&&p.lotes.length?"<small>"+p.lotes.length+" lote(s) identificado(s)</small>":"")+"</td></tr>";
  });
- var col=gestor?11:9;
- $("lista").innerHTML=out+(itens.length?"":"<tr><td colspan='"+col+"'>Nenhum material encontrado.</td></tr>")+"</tbody></table></div>";
+ $("lista").innerHTML=out+(itens.length?"":"<tr><td colspan='9'>Nenhum material encontrado.</td></tr>")+"</tbody></table></div>";
  atualizaSelecionados();
 }
 function lotes(cod){
@@ -118,19 +159,20 @@ function lotes(cod){
  var out="<div class='modal-bloco'><h2>Lotes / Series</h2><p>"+esc(p.codigo_interno)+" | "+esc(p.produto)+"</p>"+
   "<p>Informe a quantidade fisica de cada lote, inclusive zero.</p>"+
   "<div id='linhasLote'>";
- lista.forEach(function(l){out+=linhaLote(l.nome,l.qtde)});
+ lista.forEach(function(l){out+=linhaLote(l.nome,d.lotes?l.qtde:"")});
  out+="</div><button class='mini' onclick='BRAdicionarLote()'>+ Novo lote</button>"+
   "<div class='modal-botoes'><button onclick='BRFecharModal()'>Cancelar</button><button class='destaque' onclick='BRSalvarLotes("+cod+")'>Salvar contagem</button></div></div>";
  $("modal").innerHTML=out;$("modal").hidden=false;
 }
 function linhaLote(nome,qtd){return "<div class='linha-lote'><input class='nome-lote' placeholder='Lote / Serie' value='"+esc(nome)+"'>"+
- "<input class='qtd-lote' type='number' min='0' step='any' placeholder='Qtd.' value='"+esc(qtd===null||qtd===undefined?0:qtd)+"'></div>"}
-function adicionarLote(){$("linhasLote").insertAdjacentHTML("beforeend",linhaLote("",0))}
+ "<input class='qtd-lote' type='number' min='0' step='any' placeholder='Contagem...' value='"+esc(qtd===null||qtd===undefined?"":qtd)+"' autocomplete='off'></div>"}
+function adicionarLote(){$("linhasLote").insertAdjacentHTML("beforeend",linhaLote("",""))}
 function salvarLotes(cod){
  var rows=Array.from(document.querySelectorAll(".linha-lote")),ls=[],vistos={};
  for(var i=0;i<rows.length;i++){
-  var nome=rows[i].querySelector(".nome-lote").value.trim(),q=Number(rows[i].querySelector(".qtd-lote").value);
-  if(!nome||!Number.isFinite(q)||q<0){aviso("Lote e quantidade invalidos.",true);return}
+  var nome=rows[i].querySelector(".nome-lote").value.trim(),textoQtd=rows[i].querySelector(".qtd-lote").value;
+  var q=Number(textoQtd);
+  if(!nome||textoQtd.trim()===""||!Number.isFinite(q)||q<0){aviso("Lote e quantidade invalidos.",true);return}
   if(vistos[nome.toUpperCase()]){aviso("Lote repetido.",true);return}
   vistos[nome.toUpperCase()]=1;ls.push({nome:nome,qtde:q});
  }
@@ -143,8 +185,7 @@ async function enviarContagens(){
  if(!selecionados.length){aviso("Informe ao menos uma contagem na pagina.",true);return}
  var payload={cod_empresa:empresa,itens:selecionados.map(function(p){
   var d=rascunhos[p.cod_produto];
-  return {cod_produto:p.cod_produto,estoque_esperado:p.qtde_total,
-          qtde_inventariada:d.qtde,versao:p.versao,lotes:d.lotes};
+  return {cod_produto:p.cod_produto,qtde_inventariada:d.qtde,versao:p.versao,lotes:d.lotes};
  })};
  if(!confirm("Enviar "+payload.itens.length+" contagem(ns) para conferencia? O estoque nao sera alterado agora."))return;
  try{
@@ -169,7 +210,7 @@ async function carregarConfig(){
 async function gravarConfig(){
  try{
   await api("/brastorno/inventario/config","POST",{cod_empresa:empresa,somente_ativos:$("cfgAtivos").checked,metodo_zero:$("cfgMetodo").checked});
-  aviso("Parametrizacoes salvas para empresa "+empresa+".");
+  carregarFiltros();aviso("Parametrizacoes salvas para empresa "+empresa+".");
  }catch(e){aviso(erroMsg(e),true)}
 }
 async function carregarConferencia(){
@@ -207,13 +248,14 @@ function csvExport(){
  a.href=url;a.download="BRASTORNO_INVENTARIO_EMPRESA_"+empresa+".csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 }
 function logout(){localStorage.removeItem("brastorno_token");localStorage.removeItem("brastorno_usuario_nome");location.href="../login.html"}
+window.BRFiltrar=aplicarFiltro;window.BRLimparFiltros=limparFiltros;window.BRToggleFiltros=togglePainelFiltros;
 window.BRAba=trocarAba;window.BREmpresa=setEmpresa;window.BRPagina=function(delta){pagina=Math.max(1,pagina+delta);carregarItens()};
 window.BRQtd=mudaQuantidade;window.BRLotes=lotes;window.BRAdicionarLote=adicionarLote;window.BRSalvarLotes=salvarLotes;
 window.BRFecharModal=function(){$("modal").hidden=true};window.BREnviar=enviarContagens;window.BRGravarConfig=gravarConfig;
 window.BRDecidir=decidir;window.BRCarregarConferencia=carregarConferencia;window.BRExportar=csvExport;window.BRLogout=logout;
 $("pesquisa").addEventListener("input",function(){clearTimeout(temporizador);temporizador=setTimeout(function(){pagina=1;carregarItens()},350)});
 $("limparBusca").addEventListener("click",function(){$("pesquisa").value="";pagina=1;carregarItens()});
-$("empresa").value=empresa;
+$("empresa").value=empresa;carregarFiltros();
 (async function(){
  try{
   perfil=await api("/brastorno/inventario/perfil");
