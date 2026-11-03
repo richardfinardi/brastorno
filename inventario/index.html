@@ -34,7 +34,18 @@
 <div class="campo"><label>Subgrupo 7</label><select id="dist_subgrupo7"><option value="">Todos</option></select></div>
 <div class="campo"><label>Local de estoque</label><select id="dist_local_estoque"><option value="">Todos</option></select></div></div></details>
  <div class="config-flex"><button type="button" class="destaque" onclick="BRDistribuir()">Atribuir materiais</button><span class="info-suave">Cada material so pode ter uma atribuicao ativa. Limite de 2.000 itens por operacao.</span></div>
- <div class="config-titulo"><h3>Materiais distribuidos</h3><div class="campo"><label>STATUS</label><select id="statusAtribuicao" onchange="BRCargaAtribuicoes()"><option value="TODOS">Todos</option><option value="ATRIBUIDO">Aguardando contagem</option><option value="EM_CONFERENCIA">Em conferencia</option><option value="CONCLUIDO">Concluidos</option></select></div></div>
+ <div class="config-titulo"><h3>Materiais distribuidos</h3></div>
+ <div class="config-flex">
+  <div class="campo"><label>GRUPO DE CONTAGEM</label><select id="filtroGrupoAtribuido" onchange="BRFiltroAtribuicoes()"><option value="">Todos os grupos</option></select></div>
+  <div class="campo"><label>USUARIO RESPONSAVEL</label><select id="filtroUsuarioAtribuido" onchange="BRFiltroAtribuicoes()"><option value="">Todos os usuarios</option></select></div>
+  <div class="campo"><label>STATUS</label><select id="statusAtribuicao" onchange="BRFiltroAtribuicoes()"><option value="TODOS">Todos</option><option value="ATRIBUIDO">Aguardando contagem</option><option value="EM_CONFERENCIA">Em conferencia</option><option value="CONCLUIDO">Concluidos</option></select></div>
+ </div>
+ <div class="acoes-remocao" id="barraRemocao">
+  <span id="contadorSelecaoAtrib">0 selecionados</span>
+  <button type="button" id="btnRemoverSelecionados" onclick="BRRemoverLote(false)" disabled>Remover selecionados</button>
+  <button type="button" id="btnRemoverFiltrados" class="botao-perigo" onclick="BRRemoverLote(true)" disabled>Remover todos do grupo/usuario filtrado</button>
+  <span class="info-suave" id="limiteRemocao">Somente materiais nao contados podem ser desatribuidos.</span>
+ </div>
  <div id="listaAtribuicoes" class="info-suave">Carregando distribuicoes...</div>
 </div>
 <div class="config-bloco">
