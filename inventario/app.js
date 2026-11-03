@@ -41,61 +41,100 @@ function trocarAba(id){
  $("filtros").hidden=false; // Filtros disponiveis nas quatro abas
  $("exportarInventario").hidden=(id!=="reservados");
  aviso("");
- if(id==="parametrizacoes"){carregarConfig();carregarEquipes();}
+ if(id==="parametrizacoes"){carregarConfig();carregarEquipes();carregarFiltros("dist");}
  else if(id==="conferencia")carregarConferencia();
  else carregarItens();
+ carregarFiltros("main");
 }
 function setEmpresa(v){
- empresa=Number(v)||1;pagina=1;rascunhos={};filtrosAtivos={};
+ empresa=Number(v)||1;pagina=1;rascunhos={};filtrosAtivos={};filtrosDist={};
  localStorage.setItem("br_invent_empresa",empresa);
  camposFiltros.forEach(function(k){var el=$("filtro_"+k);if(el)el.value=""});
- carregarFiltros();trocarAba(aba)
+ trocarAba(aba)
 }
-async function carregarFiltros(){
- var eAtual=empresa,serial=++consultaFiltrosSerial;
- $("msgFiltros").textContent="Atualizando opcoes de filtros...";
- try{
-  var query="/brastorno/inventario/filtros?cod_empresa="+eAtual;
-  camposFiltros.forEach(function(k){
-   if(filtrosAtivos[k])query+="&"+k+"="+encodeURIComponent(filtrosAtivos[k]);
-  });
-  var resultado=await api(query);
-  if(eAtual!==empresa||serial!==consultaFiltrosSerial)return;
-  camposFiltros.forEach(function(k){
-   var select=$("filtro_"+k),valor=String(filtrosAtivos[k]||"");
-   if(!select)return;
-   var opcoes=resultado.filtros[k]||[];
-   select.innerHTML="<option value=''>Todos</option>";
-   opcoes.forEach(function(v){
-    var opt=document.createElement("option");opt.value=v;opt.textContent=puro(v);select.add(opt);
-   });
-   // Mantenha o filtro escolhido mesmo se desaparecer do subconjunto.
-   if(valor&&!opcoes.includes(valor)){
-    var extra=document.createElement("option");extra.value=valor;extra.textContent=puro(valor);
-    select.add(extra);
-   }
-   select.value=valor;
-   // Os filtros independentes da distribuicao continuam disponiveis.
-   var dest=$("dist_"+k);
-   if(dest&&dest.options.length<=1){
-    var qTodas=resultado.filtros[k]||[];
-    qTodas.forEach(function(v){var opt=document.createElement("option");opt.value=v;opt.textContent=puro(v);dest.add(opt)});
-   }
-  });
-  $("msgFiltros").textContent="Opcoes incrementais conforme os filtros selecionados.";
- }catch(erro){
-  if(serial===consultaFiltrosSerial)$("msgFiltros").textContent="Erro ao carregar filtros: "+erroMsg(erro);
+var filtrosDist={},serieFiltrosDist=0;
+function queryFiltros(escopo,selecionados){
+ var modo=escopo==="dist"?"parametrizacoes":aba;
+ var q="/brastorno/inventario/filtros?cod_empresa="+empresa+"&modo="+modo;
+ if(escopo==="main")q+="&busca="+encodeURIComponent($("pesquisa").value.trim());
+ camposFiltros.forEach(function(k){
+  if(selecionados[k])q+="&"+k+"="+encodeURIComponent(selecionados[k]);
+ });
+ return q;
+}
+function limparDescendentes(campo,selecionados,prefixo){
+ // Trocar familia limpa grupo e subgrupos posteriores. O local permanece
+ // como filtro independente e tambem restringe as demais opcoes.
+ var idx=camposFiltros.indexOf(campo);
+ if(idx<0||campo==="local_estoque")return;
+ for(var i=idx+1;i<camposFiltros.length-1;i++){
+  selecionados[camposFiltros[i]]="";
+  var el=$(prefixo+camposFiltros[i]);if(el)el.value="";
  }
 }
-function aplicarFiltro(){
+async function carregarFiltros(escopo,tentativa){
+ escopo=escopo||"main";
+ var dist=escopo==="dist";
+ var eAtual=empresa;
+ var serial=dist?++serieFiltrosDist:++consultaFiltrosSerial;
+ var selecionados=dist?filtrosDist:filtrosAtivos;
+ var msg=dist?null:$("msgFiltros");
+ if(msg)msg.textContent="Atualizando opcoes incrementais...";
+ try{
+  var resposta=await api(queryFiltros(escopo,selecionados));
+  if(eAtual!==empresa||serial!==(dist?serieFiltrosDist:consultaFiltrosSerial))return;
+  var selecionadoInvalido=false;
+  camposFiltros.forEach(function(k){
+   var el=$((dist?"dist_":"filtro_")+k);
+   if(!el)return;
+   var atual=String(selecionados[k]||"");
+   var opcoes=(resposta.filtros&&resposta.filtros[k])||[];
+   var frag=document.createDocumentFragment();
+   var todos=document.createElement("option");todos.value="";todos.textContent="Todos";frag.appendChild(todos);
+   opcoes.forEach(function(v){
+    var opt=document.createElement("option");opt.value=v;opt.textContent=puro(v);frag.appendChild(opt);
+   });
+   el.replaceChildren(frag);
+   if(atual&&opcoes.indexOf(atual)<0){
+    selecionados[k]="";
+    selecionadoInvalido=true;
+   }
+   el.value=selecionados[k]||"";
+  });
+  if(msg)msg.textContent="As opcoes acompanham os filtros selecionados.";
+  if(selecionadoInvalido && !tentativa){
+   if(!dist){
+    var ativos=camposFiltros.filter(function(k){return !!filtrosAtivos[k]}).length;
+    $("btnFiltro").textContent="Filtros"+(ativos?" ("+ativos+")":"");
+    recarregarAba();
+   }
+   return carregarFiltros(escopo,true);
+  }
+ }catch(err){
+  if(serial===(dist?serieFiltrosDist:consultaFiltrosSerial)){
+   if(msg)msg.textContent="Erro nos filtros: "+erroMsg(err);
+   else aviso("Filtros da distribuicao: "+erroMsg(err),true);
+  }
+ }
+}
+function aplicarFiltro(campo){
  camposFiltros.forEach(function(k){var x=$("filtro_"+k);filtrosAtivos[k]=x?x.value:""});
+ limparDescendentes(campo,filtrosAtivos,"filtro_");
  var usados=camposFiltros.filter(function(k){return !!filtrosAtivos[k]}).length;
  $("btnFiltro").textContent="Filtros"+(usados?" ("+usados+")":"");
- pagina=1;carregarFiltros();recarregarAba();
+ pagina=1;
+ recarregarAba();
+ carregarFiltros("main");
+}
+function aplicarFiltroDist(campo){
+ camposFiltros.forEach(function(k){var x=$("dist_"+k);filtrosDist[k]=x?x.value:""});
+ limparDescendentes(campo,filtrosDist,"dist_");
+ carregarFiltros("dist");
 }
 function limparFiltros(){
  filtrosAtivos={};camposFiltros.forEach(function(k){var x=$("filtro_"+k);if(x)x.value=""});
- $("btnFiltro").textContent="Filtros";pagina=1;carregarFiltros();recarregarAba();
+ $("btnFiltro").textContent="Filtros";
+ pagina=1;recarregarAba();carregarFiltros("main");
 }
 function recarregarAba(){
  if(aba==="conferencia")carregarConferencia();
@@ -245,7 +284,7 @@ async function carregarConfig(){
 async function gravarConfig(){
  try{
   await api("/brastorno/inventario/config","POST",{cod_empresa:empresa,somente_ativos:$("cfgAtivos").checked,metodo_zero:$("cfgMetodo").checked});
-  carregarFiltros();aviso("Parametrizacoes salvas para empresa "+empresa+".");
+  carregarFiltros("main");carregarFiltros("dist");aviso("Parametrizacoes salvas para empresa "+empresa+".");
  }catch(e){aviso(erroMsg(e),true)}
 }
 async function carregarConferencia(){
@@ -492,6 +531,7 @@ async function toleranciaSalvar(){
   aviso("Tolerancia salva.");await carregarEquipes();
  }catch(e){aviso(erroMsg(e),true)}
 }
+window.BRDistFiltrar=aplicarFiltroDist;
 window.BRGrupoCriar=grupoCriar;
 window.BRGrupoEscolher=grupoEscolher;
 window.BRMembrosSalvar=membrosSalvar;
@@ -504,9 +544,9 @@ window.BRAba=trocarAba;window.BREmpresa=setEmpresa;window.BRPagina=function(delt
 window.BRQtd=mudaQuantidade;window.BRLotes=lotes;window.BRAdicionarLote=adicionarLote;window.BRSalvarLotes=salvarLotes;
 window.BRFecharModal=function(){$("modal").hidden=true};window.BREnviar=enviarContagens;window.BRGravarConfig=gravarConfig;
 window.BRDecidir=decidir;window.BRCarregarConferencia=carregarConferencia;window.BRExportar=csvExport;window.BRLogout=logout;
-$("pesquisa").addEventListener("input",function(){clearTimeout(temporizador);temporizador=setTimeout(function(){pagina=1;recarregarAba()},350)});
-$("limparBusca").addEventListener("click",function(){$("pesquisa").value="";pagina=1;recarregarAba()});
-$("empresa").value=empresa;carregarFiltros();
+$("pesquisa").addEventListener("input",function(){clearTimeout(temporizador);temporizador=setTimeout(function(){pagina=1;recarregarAba();carregarFiltros("main")},350)});
+$("limparBusca").addEventListener("click",function(){$("pesquisa").value="";pagina=1;recarregarAba();carregarFiltros("main")});
+$("empresa").value=empresa;
 (async function(){
  try{
   perfil=await api("/brastorno/inventario/perfil");
