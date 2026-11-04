@@ -300,3 +300,10 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
  .modal-kpi{width:98vw;padding:13px}
  .modal-kpi .tabela{max-height:65vh;overflow-x:auto}
 }
+
+/* V3.2.1 descarte unitario de contagens */
+.botoes-contados{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.botoes-contados .botao-teste{color:#9d3446;border-color:#edcad1;background:#fff8f9}
+.botoes-contados .botao-teste:hover{border-color:#b14a5c;background:#fff0f1}
+.erro-contados{border:1px solid #ecc3cb;background:#fff0f3;color:#a22b42;padding:12px 14px;border-radius:10px;margin:10px 0;font-size:12px;font-weight:700;line-height:1.5}
+.erro-contados[hidden]{display:none!important}
