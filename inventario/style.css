@@ -176,3 +176,66 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
  #acaoContagem #quantidadeDigitada{font-size:11px;min-width:0;flex:1 1 160px}
  #acaoContagem button{white-space:normal;line-height:1.25}
 }
+
+
+/* BRASTORNO V3.1 - parametrizacoes claras e progresso */
+#parametrizacoes{padding:18px!important}
+.param-hero{background:linear-gradient(105deg,#f0f5eb,#f8fafc);padding:17px 18px;border:1px solid #dfe7da;border-radius:12px;margin:0 0 14px}
+.param-hero h2{font-size:21px;color:#142446;margin:2px 0 3px}
+.param-hero p{font-size:12px;color:#718097;margin:0}
+.param-nav{display:flex;gap:7px;overflow-x:auto;overflow-y:hidden;padding-bottom:8px;margin:0 0 12px;border-bottom:1px solid #dfe6ee}
+.param-nav .param-tab{white-space:nowrap;border:1px solid #dce4ee;color:#617089;background:#fff;padding:10px 15px;border-radius:9px;font-size:12px;font-weight:850}
+.param-nav .param-tab.ativa{background:#142446;color:#fff;border-color:#142446}
+.param-tela[hidden]{display:none!important}
+.param-tela>.config-bloco{border-top:0;padding-top:9px}
+.param-tela .config-titulo h2{font-size:17px;margin-bottom:3px}
+.param-tela .config-titulo p{font-size:12px}
+.param-acoes{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.disponiveis-painel{border:1px solid #dce4ee;border-radius:13px;padding:14px;margin:15px 0;background:#fff}
+.disponiveis-painel .config-titulo{margin:0 0 11px}
+.disponiveis-painel h3{margin:0;color:#142446;font-size:16px}
+.disponiveis-painel .config-titulo p{margin:3px 0 0}
+.disponiveis-painel .subtop{font-size:12px;font-weight:750;color:#657792}
+.disponiveis-painel .lista-disponiveis{max-width:100%;overflow-x:auto}
+.disponiveis-painel .preview-tabela{max-height:410px}
+.disponiveis-painel table{min-width:610px}
+.disponiveis-painel .preview-tabela input[type=checkbox]{width:16px;height:16px;accent-color:#708e34}
+.disponiveis-painel .paginacao-disponiveis{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:10px 0;color:#738198}
+.disponiveis-rodape{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;padding:10px 0;border-top:1px solid #edf0f4}
+.disponiveis-rodape strong{font-size:12px;color:#142446;margin-right:auto}
+.disponiveis-rodape button{font-size:12px}
+.atribuicao-avancada{background:#f8fafd;border-radius:9px;padding:9px 11px}
+.atribuicao-avancada button{background:#fff}
+#progressoPainel{margin:0 0 18px;border:1px solid #dce4ee;border-radius:14px;padding:18px;background:#fff}
+.progresso-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px;flex-wrap:wrap}
+.progresso-top h2{font-size:17px;color:#142446;margin:0}
+.progresso-top p{color:#738198;font-size:11px;margin:4px 0 0}
+.progresso-barras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;padding:0 0 13px;margin-bottom:14px;border-bottom:1px solid #edf0f4}
+.progresso-linha{display:grid;grid-template-columns:1fr auto;gap:7px;font-size:12px;color:#65768a}
+.progresso-linha strong{color:#142446}
+.progresso-trilho{height:10px;border-radius:99px;background:#e5ebf2;grid-column:1/-1;overflow:hidden}
+.progresso-preenchimento{height:100%;border-radius:99px;width:0;background:#3577b2;transition:width .4s}
+.progresso-preenchimento.verde{background:#708e34}
+.progresso-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.progresso-card{border:1px solid #e0e6ee;border-radius:11px;padding:11px 13px;background:#f9fbfd;min-width:0;position:relative;overflow:hidden}
+.progresso-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#708e34}
+.progresso-card:nth-child(3n+2):before{background:#3577b2}
+.progresso-card:nth-child(3n):before{background:#ce9333}
+.progresso-card>span{display:block;color:#72809a;font-size:10px;font-weight:800;text-transform:uppercase;line-height:1.35;margin-bottom:7px}
+.progresso-card>strong{font-size:22px;color:#142446;line-height:1.2}
+.progresso-info{color:#8290a3;font-size:10px;margin:12px 0 0}
+@media(max-width:1100px){.progresso-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:680px){
+ #parametrizacoes{padding:11px!important}
+ .param-nav{gap:5px}
+ .param-nav .param-tab{padding:8px 9px;font-size:10px}
+ .disponiveis-painel{padding:9px}
+ .disponiveis-rodape{align-items:stretch}
+ .disponiveis-rodape strong{width:100%}
+ .disponiveis-rodape button{flex:1 1 145px}
+ .progresso-barras{grid-template-columns:minmax(0,1fr);gap:14px}
+ .progresso-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+ .progresso-card{padding:9px}
+ .progresso-card>strong{font-size:18px}
+ .progresso-card>span{font-size:9px}
+}
