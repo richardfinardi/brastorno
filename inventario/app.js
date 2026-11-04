@@ -11,6 +11,8 @@ var filtrosAtivos={};var consultaSerial=0;
 var metodoReposicao=localStorage.getItem("br_inv_metodo_reposicao")||"";
 if(!["","0","1","2"].includes(metodoReposicao))metodoReposicao="";
 var equipes=[],usuariosInventario=[];
+var paramAbaAtual="distribuir",previewPagina=1,previewSelecionados=new Set(),previewMateriais=[];
+var seriePreview=0,ultimoProgressoEmpresa=0;
 var selecaoRecontagem=new Set();
 var contagensRecontagem=[];
 var consultaFiltrosSerial=0;var consultaAtribSerial=0;var selecaoAtrib=new Set(),listaAtribAtual=[];
@@ -53,13 +55,13 @@ function trocarAba(id){
  $("blocoFiltroOrigem").hidden=false;
  $("exportarInventario").hidden=(id!=="reservados");
  aviso("");
- if(id==="parametrizacoes"){carregarConfig();carregarEquipes();carregarFiltros("dist");}
- else if(id==="conferencia"){carregarDestinosRecontagem();carregarConferencia()}
+ if(id==="parametrizacoes"){carregarConfig();carregarEquipes();carregarFiltros("dist");paramAba(paramAbaAtual);}
+ else if(id==="conferencia"){carregarDestinosRecontagem();carregarConferencia();atualizarProgresso()}
  else carregarItens();
  carregarFiltros("main");
 }
 function setEmpresa(v){
- empresa=Number(v)||1;pagina=1;rascunhos={};filtrosAtivos={};filtrosDist={};
+ empresa=Number(v)||1;pagina=1;rascunhos={};filtrosAtivos={};filtrosDist={};previewPagina=1;previewSelecionados.clear();
  localStorage.setItem("br_invent_empresa",empresa);
  camposFiltros.forEach(function(k){var el=$("filtro_"+k);if(el)el.value=""});
  trocarAba(aba)
@@ -144,7 +146,7 @@ function aplicarFiltroDist(campo){
  camposFiltros.forEach(function(k){var x=$("dist_"+k);filtrosDist[k]=x?x.value:""});
  filtrosDist.metodo_reposicao=$("distMetodoReposicao").value;
  limparDescendentes(campo,filtrosDist,"dist_");
- carregarFiltros("dist");
+ previewPagina=1;previewSelecionados.clear();carregarFiltros("dist");carregarDisponiveis();
 }
 function filtrarMetodoReposicao(){
  metodoReposicao=$("filtroMetodoReposicao").value;
@@ -163,7 +165,10 @@ function limparFiltros(){
 }
 function recarregarAba(){
  if(aba==="conferencia")carregarConferencia();
- else if(aba==="parametrizacoes")carregarAtribuicoes();
+ else if(aba==="parametrizacoes"){
+  if(paramAbaAtual==="distribuir")carregarDisponiveis();
+  else if(paramAbaAtual==="distribuidos")carregarAtribuicoes();
+ }
  else carregarItens();
 }
 function parametrosFiltros(){
@@ -480,7 +485,7 @@ async function solicitarRecontagem(){
   var resposta=await api("/brastorno/inventario/recontagens","POST",body);
   limparRecontagem();
   $("motivoRecontagem").value="";
-  await carregarConferencia();
+  await carregarConferencia();atualizarProgresso();
   aviso(resposta.quantidade+" material(is) enviado(s) para recontagem de "+nomeDestino+".");
  }catch(ex){
   erroRecontagem(erroMsg(ex));
@@ -500,7 +505,7 @@ async function decidir(id,aplicar){
   var acao=aplicar?"aplicar":"rejeitar";
   await api("/brastorno/inventario/conferencias/"+encodeURIComponent(id)+"/"+acao+"?cod_empresa="+empresa,"POST",{});
   aviso(aplicar?"Conferencia aplicada no CPS.":"Contagem rejeitada.");
-  carregarConferencia();
+  carregarConferencia();atualizarProgresso();
  }catch(e){aviso(erroMsg(e),true)}
 }
 function csvExport(){
@@ -597,7 +602,7 @@ async function distribuir(){
   var d=await api("/brastorno/inventario/atribuicoes","POST",
    {cod_empresa:empresa,usuario:usuario,grupo_id:grupo,cod_produtos:vals,filtros:filtros,busca:busca});
   aviso(d.atribuidos+" materiais atribuidos. "+d.ignorados+" ignorados.");
-  $("codigosDistribuicao").value="";await carregarAtribuicoes();
+  $("codigosDistribuicao").value="";previewSelecionados.clear();await carregarDisponiveis();atualizarProgresso();
  }catch(e){aviso(erroMsg(e),true)}
 }
 function filtrosDistribuicao(){
@@ -696,6 +701,163 @@ async function toleranciaSalvar(){
  }catch(e){aviso(erroMsg(e),true)}
 }
 window.BRDistFiltrar=aplicarFiltroDist;
+
+/* Parametrizacoes V3.1: cinco etapas independentes */
+function paramAba(id){
+ var validos=["distribuir","distribuidos","equipes","tolerancias","regras"];
+ if(validos.indexOf(id)<0)return;
+ paramAbaAtual=id;
+ validos.forEach(function(k){
+  var node=$("param_"+k);if(node)node.hidden=(k!==id);
+ });
+ document.querySelectorAll("[data-param-aba]").forEach(function(x){
+  var ativa=x.getAttribute("data-param-aba")===id;
+  x.classList.toggle("ativa",ativa);x.setAttribute("aria-selected",String(ativa));
+ });
+ if(id==="distribuir")carregarDisponiveis();
+ else if(id==="distribuidos")carregarAtribuicoes();
+}
+function previewParams(){
+ var q="/brastorno/inventario/disponiveis?cod_empresa="+empresa+
+  "&pagina="+previewPagina+"&limite=50"+
+  "&busca="+encodeURIComponent($("buscaDistribuicao").value.trim());
+ camposFiltros.forEach(function(k){if(filtrosDist[k])q+="&"+k+"="+encodeURIComponent(filtrosDist[k])});
+ if(filtrosDist.metodo_reposicao!=="")q+="&metodo_reposicao="+encodeURIComponent(filtrosDist.metodo_reposicao||"");
+ return q;
+}
+function contarSelecionadosPreview(){
+ $("previewSelecionados").textContent=previewSelecionados.size+" material(is) selecionado(s)";
+ $("btnAtribuirSelecionados").disabled=previewSelecionados.size===0;
+}
+function escolherPreview(codigo,checked){
+ if(checked)previewSelecionados.add(Number(codigo));else previewSelecionados.delete(Number(codigo));
+ contarSelecionadosPreview();
+}
+function marcarPaginaPreview(){
+ previewMateriais.forEach(function(x){previewSelecionados.add(Number(x.cod_produto))});
+ document.querySelectorAll("[data-preview-cod]").forEach(function(x){x.checked=true});
+ contarSelecionadosPreview();
+}
+function limparPreview(){
+ previewSelecionados.clear();
+ document.querySelectorAll("[data-preview-cod]").forEach(function(x){x.checked=false});
+ contarSelecionadosPreview();
+}
+function trocarPaginaPreview(delta){
+ previewPagina=Math.max(1,previewPagina+delta);
+ carregarDisponiveis();
+}
+async function carregarDisponiveis(){
+ var request=++seriePreview,eAtual=empresa;
+ if(aba!=="parametrizacoes"||paramAbaAtual!=="distribuir")return;
+ $("listaDisponiveis").innerHTML="<div class='carregando'>Buscando materiais disponiveis...</div>";
+ try{
+  var d=await api(previewParams());
+  if(request!==seriePreview||eAtual!==empresa||paramAbaAtual!=="distribuir")return;
+  previewMateriais=d.produtos||[];
+  $("resumoDisponiveis").innerHTML="<strong>"+fmt(d.total)+" material(is) sem atribuicao</strong>"+
+    "<span> | Deposito 1 | Pagina "+previewPagina+"</span>";
+  var html="<div class='tabela preview-tabela'><table><thead><tr><th><input type='checkbox' aria-label='Marcar pagina' onchange='BRPreviewMarcarTodos()'></th>"+
+   "<th>Codigo</th><th>Material</th><th>Unid.</th><th>Local</th><th>Origem</th></tr></thead><tbody>";
+  previewMateriais.forEach(function(p){
+    var cod=Number(p.cod_produto),origem=({"0":"Compras","1":"Producao propria","2":"Producao terceiros"})[String(p.metodo_reposicao)]||"Outro";
+    html+="<tr><td><input type='checkbox' data-preview-cod='"+cod+"' "+
+      (previewSelecionados.has(cod)?"checked":"")+
+      " onchange='BRPreviewSelecionar("+cod+",this.checked)'></td>"+
+      "<td><b>"+esc(p.codigo_interno||cod)+"</b></td>"+
+      "<td class='produto'>"+esc(p.produto)+"</td>"+
+      "<td>"+esc(p.unidade||"")+"</td>"+
+      "<td>"+esc(p.local_estoque||"Sem local informado")+"</td>"+
+      "<td>"+esc(origem)+"</td></tr>";
+  });
+  $("listaDisponiveis").innerHTML=html+(previewMateriais.length?"":"<tr><td colspan='6'>"+
+    (d.total===0?"Nenhum material livre para atribuicao neste filtro. Consulte 'Distribuidos' ou limpe os filtros.":"Sem materiais nesta pagina.")+
+    "</td></tr>")+"</tbody></table></div>";
+  $("paginacaoDisponiveis").innerHTML="<span>Pagina "+previewPagina+" | "+fmt(d.total)+" materiais</span>"+
+    "<button "+(previewPagina===1?"disabled":"")+" onclick='BRPreviewPagina(-1)'>Anterior</button>"+
+    "<button "+(!d.tem_mais?"disabled":"")+" onclick='BRPreviewPagina(1)'>Proxima</button>";
+  contarSelecionadosPreview();
+ }catch(e){
+  if(request!==seriePreview)return;
+  $("resumoDisponiveis").textContent="Nao foi possivel consultar materiais livres.";
+  $("listaDisponiveis").innerHTML="<div class='erro-caixa'>"+esc(erroMsg(e))+
+   "<br>Confira se a API do inventario V3.1 esta instalada.</div>";
+  $("paginacaoDisponiveis").innerHTML="";
+ }
+}
+function destinoSelecionado(){
+ var grupo=$("destinoTipo").value==="grupo";
+ var grupoId=grupo?$("destinoGrupo").value:"";
+ var usuario=grupo?"":$("destinoPessoa").value;
+ if(!grupoId&&!usuario){aviso("Selecione o grupo ou a pessoa responsavel.",true);return null}
+ return {grupo_id:grupoId,usuario:usuario};
+}
+async function distribuirSelecionados(){
+ var dest=destinoSelecionado(),codigos=[...previewSelecionados];
+ if(!dest||!codigos.length)return;
+ if(codigos.length>2000){aviso("Maximo de 2000 materiais por envio.",true);return}
+ if(!confirm("Atribuir "+codigos.length+" materiais selecionados?"))return;
+ try{
+  $("btnAtribuirSelecionados").disabled=true;
+  var d=await api("/brastorno/inventario/atribuicoes","POST",
+    {cod_empresa:empresa,...dest,cod_produtos:codigos,filtros:{},busca:""});
+  previewSelecionados.clear();previewPagina=1;
+  aviso(d.atribuidos+" materiais atribuidos. "+d.ignorados+" ja atribuidos.");
+  await carregarDisponiveis();atualizarProgresso();
+ }catch(e){aviso(erroMsg(e),true);contarSelecionadosPreview()}
+}
+async function distribuirFiltrados(){
+ var dest=destinoSelecionado();if(!dest)return;
+ var filtros={};
+ camposFiltros.forEach(function(k){if(filtrosDist[k])filtros[k]=filtrosDist[k]});
+ if(filtrosDist.metodo_reposicao!=="")filtros.metodo_reposicao=filtrosDist.metodo_reposicao;
+ var busca=$("buscaDistribuicao").value.trim();
+ if(!busca&&!Object.keys(filtros).length){
+  aviso("Selecione um filtro ou pesquise antes de atribuir em lote.",true);return;
+ }
+ if(!confirm("Atribuir todos os materiais do filtro ate 2000? Materiais ja atribuidos serao ignorados."))return;
+ try{
+  var d=await api("/brastorno/inventario/atribuicoes","POST",
+    {cod_empresa:empresa,...dest,cod_produtos:[],filtros:filtros,busca:busca});
+  previewSelecionados.clear();previewPagina=1;
+  aviso(d.atribuidos+" materiais atribuidos. "+d.ignorados+" ja atribuidos.");
+  await carregarDisponiveis();atualizarProgresso();
+ }catch(e){aviso(erroMsg(e),true)}
+}
+/* Indicadores consolidados da empresa, sem depender da paginacao */
+async function atualizarProgresso(){
+ var empresaInicio=empresa;
+ $("progressoInfo").textContent="Atualizando indicadores...";
+ try{
+  var p=await api("/brastorno/inventario/progresso?cod_empresa="+empresaInicio);
+  if(empresa!==empresaInicio)return;
+  var keys={
+   pTotal:"total_materiais",pReservados:"com_reserva",pSemReserva:"sem_reserva",
+   pAtribuidos:"atribuidos",pSemAtribuir:"sem_atribuir",
+   pContados:"contados",pInventariados:"inventariados",
+   pConferencia:"em_conferencia",pRecontagens:"recontagens"
+  };
+  Object.keys(keys).forEach(function(k){$(k).textContent=fmt(p[keys[k]])});
+  $("progressoSubtitulo").textContent="Empresa "+empresa+" | Deposito 1 | Totais completos";
+  $("pctContados").textContent=fmt(p.pct_contado)+"%";
+  $("pctInventariados").textContent=fmt(p.pct_inventariado)+"%";
+  $("barraContados").style.width=Math.max(0,Math.min(100,p.pct_contado||0))+"%";
+  $("barraInventariados").style.width=Math.max(0,Math.min(100,p.pct_inventariado||0))+"%";
+  $("progressoInfo").textContent="Materiais unicos. Recontagens = total de solicitacoes;"+
+   " contados = materiais com contagem enviada; inventariados = com ajuste aplicado no CPS.";
+ }catch(e){$("progressoInfo").textContent="Indicadores indisponiveis: "+erroMsg(e)+
+   ". Instale o modulo V3.1 na API."}
+}
+window.BRParamAba=paramAba;
+window.BRPreviewRecarregar=function(){previewPagina=1;carregarDisponiveis()};
+window.BRPreviewMarcarTodos=marcarPaginaPreview;
+window.BRPreviewLimpar=limparPreview;
+window.BRPreviewSelecionar=escolherPreview;
+window.BRPreviewPagina=trocarPaginaPreview;
+window.BRDistribuirSelecionados=distribuirSelecionados;
+window.BRDistribuirFiltrados=distribuirFiltrados;
+window.BRAtualizarProgresso=atualizarProgresso;
+
 window.BRGrupoCriar=grupoCriar;
 window.BRGrupoEscolher=grupoEscolher;
 window.BRMembrosSalvar=membrosSalvar;
@@ -709,6 +871,11 @@ window.BRAba=trocarAba;window.BREmpresa=setEmpresa;window.BRPagina=function(delt
 window.BRQtd=mudaQuantidade;window.BRLotes=lotes;window.BRAdicionarLote=adicionarLote;window.BRSalvarLotes=salvarLotes;
 window.BRFecharModal=function(){$("modal").hidden=true};window.BREnviar=enviarContagens;window.BRGravarConfig=gravarConfig;
 window.BRDecidir=decidir;window.BRCarregarConferencia=carregarConferencia;window.BRExportar=csvExport;window.BRLogout=logout;
+$("buscaDistribuicao").addEventListener("input",function(){
+ clearTimeout(temporizador);
+ temporizador=setTimeout(function(){previewPagina=1;previewSelecionados.clear();carregarDisponiveis()},330);
+});
+setInterval(function(){if(aba==="conferencia"&&isGestor())atualizarProgresso()},120000);
 $("pesquisa").addEventListener("input",function(){clearTimeout(temporizador);temporizador=setTimeout(function(){pagina=1;recarregarAba();carregarFiltros("main")},350)});
 $("limparBusca").addEventListener("click",function(){$("pesquisa").value="";pagina=1;recarregarAba();carregarFiltros("main")});
 $("empresa").value=empresa;
