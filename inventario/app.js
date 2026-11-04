@@ -905,7 +905,7 @@ async function carregarContados(){
   $("totalContadosListagem").textContent=fmt(d.total)+" material(is) com contagem registrada";
   var t="<div class='tabela contados-tabela'><table><thead><tr><th>Selecionar</th><th>Codigo</th>"+
    "<th>Material</th><th>Unid.</th><th>Ultimo contador</th><th>Ultima qtd.</th><th>Status atual</th>"+
-   "<th>Contagens</th><th>Ja aplicado no CPS?</th><th>Historico</th></tr></thead><tbody>";
+   "<th>Contagens</th><th>Ja aplicado no CPS?</th><th>Acoes</th></tr></thead><tbody>";
   contadosAtuais.forEach(function(p){
    var cod=Number(p.cod_produto);
    var status=p.status_ultima_contagem||"";
@@ -918,7 +918,8 @@ async function carregarContados(){
      "<td><span class='status-chip "+cor+"'>"+esc(status.replace(/_/g," "))+"</span></td>"+
      "<td>"+fmt(p.quantidade_contagens)+"</td>"+
      "<td>"+(p.ajuste_ja_feito_cps?"<b class='texto-cps'>SIM</b>":"Nao")+"</td>"+
-     "<td><button type='button' class='mini' onclick='BRHistoricoContado("+cod+")'>Ver historico</button></td></tr>";
+     "<td><div class='botoes-contados'><button type='button' class='mini' onclick='BRHistoricoContado("+cod+")'>Historico</button>"+
+ "<button type='button' class='mini botao-teste' onclick='BRDesconsiderarItem("+cod+")'>Desconsiderar teste</button></div></td></tr>";
   });
   $("listaContados").innerHTML=t+(contadosAtuais.length?"":"<tr><td colspan='10'>Nenhum material contado neste filtro.</td></tr>")+"</tbody></table></div>";
   $("paginacaoContados").innerHTML="<span>Pagina "+contadosPagina+" | "+fmt(d.total)+" materiais</span>"+
@@ -990,31 +991,59 @@ async function recontarContados(){
 function atualizarProgressoSeVisivel(){
  if(isGestor())atualizarProgresso();
 }
+function erroContados(mensagem){
+ var alerta=$("erroContados");
+ if(alerta){alerta.textContent=mensagem||"";alerta.hidden=!mensagem}
+ if(mensagem){aviso(mensagem,true);if(alerta)alerta.scrollIntoView({behavior:"smooth",block:"nearest"})}
+}
+async function desconsiderarUmContado(codigo){
+ var p=contadosAtuais.find(function(x){return Number(x.cod_produto)===Number(codigo)});
+ if(!p){erroContados("Material nao encontrado na lista. Atualize a tela.");return}
+ await desconsiderarContadosLista([p]);
+}
 async function desconsiderarTestes(){
  var lista=[...contadosSelecionados.values()];
- if(!lista.length||lista.length>100){aviso("Selecione de 1 a 100 materiais de teste.",true);return}
+ await desconsiderarContadosLista(lista);
+}
+async function desconsiderarContadosLista(lista){
+ erroContados("");
+ if(!lista.length||lista.length>100){erroContados("Selecione de 1 a 100 materiais de teste.");return}
  var aplicados=lista.filter(function(x){return x.ajuste_ja_feito_cps});
- var msg="Desconsiderar as contagens de "+lista.length+" material(is) no progresso?"+
-  "\nO historico ficara salvo e os materiais voltarao a ser SEM ATRIBUICAO."+
-  "\nESTOQUE E KARDEX DO CPS NAO SERAO MODIFICADOS.";
+ var um=lista.length===1;
+ var material=um?lista[0]:null;
+ var nome=um?(material.codigo_interno||material.cod_produto)+" | "+material.produto:lista.length+" materiais";
+ var msg="Desconsiderar a(s) contagem(ns) de TESTE de "+nome+"?"+
+  "\nO registro e o historico de auditoria serao preservados."+
+  "\nO material sera liberado para uma nova distribuicao."+
+  "\nO ESTOQUE e KARDEX do CPS NAO SERAO ALTERADOS.";
  if(aplicados.length)msg+="\nATENCAO: "+aplicados.length+" material(is) tiveram movimentacao REAL no CPS!";
  if(!confirm(msg))return;
- var digitado=prompt("Para confirmar, escreva exatamente: DESCONSIDERAR TESTES","");
- if(digitado!=="DESCONSIDERAR TESTES"){aviso("Operacao cancelada. Confirmacao diferente.",true);return}
- if(aplicados.length&&!confirm("ULTIMA CONFIRMACAO: Saldo de "+aplicados.length+
-    " material(is) JA FOI AJUSTADO no CPS e NAO sera revertido. Deseja apenas desconsiderar o teste no painel?"))return;
+ // Para contagem somente rejeitada, uma confirmacao explicita e suficiente.
+ // Para produto com ajuste real, exigir texto e segunda confirmacao.
+ if(aplicados.length){
+  var digitado=prompt("Produto(s) com ajuste real no CPS. Digite DESCONSIDERAR TESTES para continuar.","");
+  if(digitado!=="DESCONSIDERAR TESTES"){
+   erroContados("Operacao cancelada. Nenhuma contagem foi desconsiderada.");return;
+  }
+  if(!confirm("CONFIRMACAO FINAL: os saldos e o Kardex do CPS NAO serao revertidos. Desconsiderar somente a contagem?"))return;
+ }
+ var payload={cod_empresa:empresa,cod_produtos:lista.map(function(x){return Number(x.cod_produto)}),
+   confirmacao:"DESCONSIDERAR TESTES",motivo:"Contagem de teste desconsiderada pelo gestor",
+   ciente_ajustes_cps:aplicados.length>0};
  try{
   $("btnLimparContados").disabled=true;
-  var resultado=await api("/brastorno/inventario/contados/desconsiderar-testes","POST",{
-   cod_empresa:empresa,cod_produtos:lista.map(function(x){return x.cod_produto}),
-   confirmacao:digitado,motivo:"Teste de implantacao desconsiderado pelo gestor",
-   ciente_ajustes_cps:aplicados.length>0
-  });
-  desmarcarContados();contadosPagina=1;
+  var resultado=await api("/brastorno/inventario/contados/desconsiderar-testes","POST",payload);
+  lista.forEach(function(x){contadosSelecionados.delete(Number(x.cod_produto))});
+  contadosPagina=1;
   await carregarContados();
   atualizarProgressoSeVisivel();
-  aviso(resultado.materiais+" materiais liberados para nova distribuicao. CPS NAO ALTERADO.");
- }catch(err){aviso(erroMsg(err),true);atualizarSelecionadosContados()}
+  aviso(resultado.materiais+" material(is) desconsiderado(s). Liberado(s) para nova distribuicao. CPS preservado.");
+ }catch(err){
+  var mensagem=erroMsg(err);
+  if(err.http===404)mensagem+=" (A contagem pode ter sido desconsiderada anteriormente. Atualize a tela.)";
+  erroContados("Nao foi possivel desconsiderar "+nome+": "+mensagem);
+  atualizarSelecionadosContados();
+ }
 }
 var titulosKPI={
  total_materiais:"Total de materiais",com_reserva:"Materiais com reserva",sem_reserva:"Materiais sem reserva",
@@ -1069,6 +1098,7 @@ window.BRHistoricoContado=historicoContado;
 window.BRDestinoContados=destinoContados;
 window.BRRecontarContados=recontarContados;
 window.BRDesconsiderarTestes=desconsiderarTestes;
+window.BRDesconsiderarItem=desconsiderarUmContado;
 window.BRDetalharKPI=detalharKPI;
 window.BRKpiPagina=function(delta){kpiPagina=Math.max(1,kpiPagina+delta);carregarDetalhesKPI()};
 window.BRIrContados=function(){$("modal").hidden=true;trocarAba("contados")};
