@@ -108,3 +108,71 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
 /* V2.7.1: retorno de validacao de recontagem */
 .erro-recontagem{background:#fff0f1;color:#a52a3f;border:1px solid #e9c3cc;border-radius:9px;padding:11px 13px;font-weight:750;font-size:12px;margin:9px 0;line-height:1.5}
 .erro-recontagem[hidden]{display:none!important}
+
+
+/* V2.9 - Contagem cega responsiva sem barra lateral */
+.contagem-wrap{overflow-x:auto;max-width:100%;max-height:66vh}
+.contagem-tabela{width:100%;min-width:780px;border-collapse:collapse;table-layout:auto}
+.contagem-tabela th{white-space:nowrap}
+.contagem-tabela .contagem-codigo{min-width:112px;white-space:nowrap}
+.contagem-tabela .contagem-codigo strong{font-size:12px;color:#142446}
+.contagem-tabela .contagem-codigo small{font-size:10px}
+.contagem-tabela .contagem-material{min-width:190px;max-width:none;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+.contagem-tabela .contagem-unidade{white-space:nowrap;width:62px}
+.contagem-tabela .contagem-local{min-width:115px;max-width:230px;white-space:normal;overflow-wrap:anywhere}
+.contagem-tabela .contagem-input{min-width:130px;width:145px}
+.contagem-tabela .contagem-input .qtd{width:120px;max-width:100%;font-size:14px}
+.contagem-tabela .contagem-lotes{min-width:110px;width:140px}
+.sem-local{color:#8a96a6;font-size:11px;font-style:italic}
+@media(max-width:820px){
+ body{width:100%;overflow-x:hidden}
+ #corpo{max-width:100%;min-width:0;overflow-x:clip}
+ .contagem-wrap{overflow-x:hidden!important;max-height:none;max-width:100%;border:none;background:transparent}
+ table.contagem-tabela{width:100%;min-width:0!important;display:block;background:transparent;border:none}
+ .contagem-tabela thead{display:none}
+ .contagem-tabela tbody{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0}
+ .contagem-tabela .contagem-linha{
+   display:grid!important;grid-template-columns:minmax(0,1fr) auto;
+   grid-template-areas:"codigo unid" "produto produto" "local local" "entrada lotes";
+   gap:4px 9px;max-width:100%;min-width:0;align-items:center;
+   background:#fff;border:1px solid #e0e6ee;border-radius:12px;
+   box-shadow:0 2px 8px #182b460a;padding:12px!important;
+ }
+ .contagem-tabela .contagem-linha:hover{background:#fff}
+ .contagem-tabela .contagem-linha td{
+   min-width:0!important;width:auto!important;max-width:100%!important;
+   display:block;padding:0!important;border:0!important;position:static!important;
+   background:transparent!important;box-shadow:none!important;
+ }
+ .contagem-tabela .contagem-codigo{grid-area:codigo}
+ .contagem-tabela .contagem-codigo strong{font-size:12px}
+ .contagem-tabela .contagem-codigo small{display:none}
+ .contagem-tabela .contagem-unidade{
+   grid-area:unid;justify-self:end;text-align:right;
+   border-radius:7px!important;background:#edf3e6!important;
+   padding:3px 7px!important;color:#4f6b31;font-size:11px;font-weight:850
+ }
+ .contagem-tabela .contagem-material{
+   grid-area:produto;font-weight:700;font-size:13px;line-height:1.35;
+   color:#203657;overflow-wrap:anywhere
+ }
+ .contagem-tabela .contagem-local{grid-area:local;color:#687a92;font-size:11px;line-height:1.25}
+ .contagem-tabela .contagem-local::before{content:"LOCAL: ";font-weight:850;font-size:10px;color:#708e34}
+ .contagem-tabela .contagem-input{grid-area:entrada;align-self:end;min-width:0}
+ .contagem-tabela .contagem-input::before{
+   content:"CONTAGEM FISICA";display:block;color:#738198;
+   font-size:9px;font-weight:900;letter-spacing:.07em;margin-bottom:4px
+ }
+ .contagem-tabela .contagem-input .qtd{
+   font-size:16px;font-weight:750;width:100%;max-width:180px;
+   min-height:43px;padding:9px;border:1px solid #91af65;border-radius:9px
+ }
+ .contagem-tabela .contagem-lotes{grid-area:lotes;justify-self:end;align-self:end;text-align:right}
+ .contagem-tabela .contagem-lotes button{min-height:42px;max-width:135px;padding:7px 9px}
+ .contagem-tabela .contagem-lotes:empty{display:none}
+ .contagem-tabela tbody>tr:not(.contagem-linha){display:block;background:#fff;padding:15px}
+ .contagem-tabela tbody>tr:not(.contagem-linha) td{display:block;border:none;padding:4px}
+ #acaoContagem{width:100%;max-width:100%;gap:8px;border-radius:12px}
+ #acaoContagem #quantidadeDigitada{font-size:11px;min-width:0;flex:1 1 160px}
+ #acaoContagem button{white-space:normal;line-height:1.25}
+}
