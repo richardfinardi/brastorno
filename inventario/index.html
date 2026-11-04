@@ -8,21 +8,21 @@
 <section id="contagem"><div class="subtop"><p id="resumoContagem"></p></div></section>
 <div id="lista"></div><div id="paginacao"></div>
 <div id="acaoContagem" hidden><b id="quantidadeDigitada">0 material(is) para enviar</b><button id="btnEnviar" class="destaque" onclick="BREnviar()">Enviar para conferencia</button></div>
-<section id="parametrizacoes" class="painel" hidden><h2>Parametrizacoes da empresa</h2><div id="formConfig"></div>
-<div class="config-bloco">
- <div class="config-titulo"><div><h2>Grupos de contagem</h2><p>Cadastre equipes e associe usuarios habilitados no CPS.</p></div></div>
- <div class="config-flex"><div class="campo campo-longo"><label>NOME DO NOVO GRUPO</label><input id="nomeGrupo" maxlength="90" placeholder="Ex.: Almoxarifado A"></div><button type="button" class="destaque" onclick="BRGrupoCriar()">Criar grupo</button></div>
- <div class="config-flex"><div class="campo campo-longo"><label>GRUPO PARA DEFINIR INTEGRANTES</label><select id="grupoEditar" onchange="BRGrupoEscolher()"><option value="">Selecione...</option></select></div><button type="button" onclick="BRMembrosSalvar()" class="destaque">Salvar integrantes</button></div>
- <div id="usuariosGrupo" class="usuarios-grupo"></div>
- <div id="resumoGrupos" class="info-suave">Nenhum grupo cadastrado.</div>
-</div>
-<div class="config-bloco">
+<section id="parametrizacoes" class="painel" hidden>
+<div class="param-hero"><div><span class="page-eyebrow">GESTAO DO INVENTARIO</span><h2>Parametrizacoes</h2><p>Configure cada etapa separadamente.</p></div></div>
+<nav class="param-nav" aria-label="Secoes das parametrizacoes">
+ <button class="param-tab ativa" type="button" data-param-aba="distribuir" onclick="BRParamAba('distribuir')">1. Distribuir</button>
+ <button class="param-tab" type="button" data-param-aba="distribuidos" onclick="BRParamAba('distribuidos')">2. Distribuidos</button>
+ <button class="param-tab" type="button" data-param-aba="equipes" onclick="BRParamAba('equipes')">3. Equipes</button>
+ <button class="param-tab" type="button" data-param-aba="tolerancias" onclick="BRParamAba('tolerancias')">4. Tolerancias</button>
+ <button class="param-tab" type="button" data-param-aba="regras" onclick="BRParamAba('regras')">5. Regras</button>
+</nav><div id="param_distribuir" class="param-tela"><div class="config-bloco">
  <div class="config-titulo"><div><h2>Distribuicao de materiais</h2><p>Direcione materiais para uma pessoa ou para a fila compartilhada de um grupo.</p></div></div>
  <div class="config-flex"><div class="campo"><label>ATRIBUIR PARA</label><select id="destinoTipo" onchange="BRDestinoTipo()"><option value="grupo">Grupo de contagem</option><option value="usuario">Pessoa especifica</option></select></div>
   <div class="campo campo-longo" id="destinoGrupoWrap"><label>GRUPO</label><select id="destinoGrupo"><option value="">Selecione...</option></select></div>
   <div class="campo campo-longo" id="destinoPessoaWrap" hidden><label>USUARIO</label><select id="destinoPessoa"><option value="">Selecione...</option></select></div></div>
- <div class="config-flex"><div class="campo campo-longo"><label>CODIGOS DOS PRODUTOS (OPCIONAL)</label><textarea id="codigosDistribuicao" rows="2" placeholder="Ex.: 71, 1164, 23417"></textarea></div>
- <div class="campo campo-longo"><label>BUSCAR PELO NOME OU CODIGO (OPCIONAL)</label><input id="buscaDistribuicao" placeholder="Pesquisa para distribuir"></div></div>
+ <details class="filtros-suspensos"><summary>Distribuir digitando codigos (opcional)</summary><div class="config-flex"><div class="campo campo-longo"><label>CODIGOS DOS PRODUTOS (OPCIONAL)</label><textarea id="codigosDistribuicao" rows="2" placeholder="Ex.: 71, 1164, 23417"></textarea></div></div></details><div class="config-flex">
+ <div class="campo campo-longo"><label>BUSCAR MATERIAL DISPONIVEL</label><input id="buscaDistribuicao" placeholder="Pesquisar materiais disponiveis..." autocomplete="off"></div></div>
  <details id="filtrosDistribuicao" class="filtros-suspensos"><summary>Filtros por origem, familia, grupo, subgrupos e local de estoque</summary><div class="campos-filtros"><div class="campo"><label>Origem do material</label><select id="distMetodoReposicao" onchange="BRDistFiltrar('metodo_reposicao')"><option value="">Todos</option><option value="0">Compras</option><option value="1">Producao propria</option><option value="2">Producao terceiros</option></select></div><div class="campo"><label>Familia</label><select id="dist_familia" onchange="BRDistFiltrar('familia')"><option value="">Todos</option></select></div>
 <div class="campo"><label>Grupo</label><select id="dist_grupo" onchange="BRDistFiltrar('grupo')"><option value="">Todos</option></select></div>
 <div class="campo"><label>Subgrupo 1</label><select id="dist_subgrupo1" onchange="BRDistFiltrar('subgrupo1')"><option value="">Todos</option></select></div>
@@ -33,8 +33,25 @@
 <div class="campo"><label>Subgrupo 6</label><select id="dist_subgrupo6" onchange="BRDistFiltrar('subgrupo6')"><option value="">Todos</option></select></div>
 <div class="campo"><label>Subgrupo 7</label><select id="dist_subgrupo7" onchange="BRDistFiltrar('subgrupo7')"><option value="">Todos</option></select></div>
 <div class="campo"><label>Local completo (inclui sem local)</label><select id="dist_local_estoque" onchange="BRDistFiltrar('local_estoque')"><option value="">Todos</option></select></div><div class="campo"><label>Setor / antes da barra</label><select id="dist_local_parte1" onchange="BRDistFiltrar('local_parte1')"><option value="">Todos</option></select></div><div class="campo"><label>Posicao / depois da barra</label><select id="dist_local_parte2" onchange="BRDistFiltrar('local_parte2')"><option value="">Todos</option></select></div></div></details>
- <div class="config-flex"><button type="button" class="destaque" onclick="BRDistribuir()">Atribuir materiais</button><span class="info-suave">Cada material so pode ter uma atribuicao ativa. Limite de 2.000 itens por operacao.</span></div>
- <div class="config-titulo"><h3>Materiais distribuidos</h3></div>
+
+ <div class="disponiveis-painel">
+   <div class="config-titulo">
+    <div><h3>Materiais disponiveis para atribuir</h3><p>Selecione os materiais ainda nao atribuidos. Use os filtros suspensos acima.</p></div>
+    <div class="param-acoes"><button type="button" class="mini" onclick="BRPreviewRecarregar()">Atualizar lista</button>
+    <button type="button" class="mini" onclick="BRPreviewMarcarTodos()">Marcar pagina</button>
+    <button type="button" class="mini" onclick="BRPreviewLimpar()">Desmarcar</button></div>
+   </div>
+   <div id="resumoDisponiveis" class="subtop">Carregando materiais disponiveis...</div>
+   <div id="listaDisponiveis" class="lista-disponiveis"><div class="carregando">Carregando...</div></div>
+   <div id="paginacaoDisponiveis" class="paginacao-disponiveis"></div>
+   <div class="disponiveis-rodape"><strong id="previewSelecionados">0 materiais selecionados</strong>
+    <button class="destaque" type="button" id="btnAtribuirSelecionados" onclick="BRDistribuirSelecionados()" disabled>Atribuir selecionados</button>
+    <button type="button" onclick="BRDistribuirFiltrados()" id="btnAtribuirFiltrados">Atribuir todos do filtro</button></div>
+   <p class="info-suave">A distribuicao nao modifica saldo nem movimenta estoque.</p>
+ </div>
+ <div class="config-flex atribuicao-avancada"><button type="button" onclick="BRDistribuir()">Atribuir pelos codigos digitados</button><span class="info-suave">Cada material so pode ter uma atribuicao ativa. Limite de 2.000 itens por operacao.</span></div>
+ </div>
+</div><div id="param_distribuidos" class="param-tela" hidden><div class="config-bloco"><div class="config-titulo"><h3>Materiais distribuidos</h3></div>
  <div class="config-flex">
   <div class="campo"><label>GRUPO DE CONTAGEM</label><select id="filtroGrupoAtribuido" onchange="BRFiltroAtribuicoes()"><option value="">Todos os grupos</option></select></div>
   <div class="campo"><label>USUARIO RESPONSAVEL</label><select id="filtroUsuarioAtribuido" onchange="BRFiltroAtribuicoes()"><option value="">Todos os usuarios</option></select></div>
@@ -48,15 +65,45 @@
  </div>
  <div id="listaAtribuicoes" class="info-suave">Carregando distribuicoes...</div>
 </div>
-<div class="config-bloco">
+</div><div id="param_equipes" class="param-tela" hidden><div class="config-bloco">
+ <div class="config-titulo"><div><h2>Grupos de contagem</h2><p>Cadastre equipes e associe usuarios habilitados no CPS.</p></div></div>
+ <div class="config-flex"><div class="campo campo-longo"><label>NOME DO NOVO GRUPO</label><input id="nomeGrupo" maxlength="90" placeholder="Ex.: Almoxarifado A"></div><button type="button" class="destaque" onclick="BRGrupoCriar()">Criar grupo</button></div>
+ <div class="config-flex"><div class="campo campo-longo"><label>GRUPO PARA DEFINIR INTEGRANTES</label><select id="grupoEditar" onchange="BRGrupoEscolher()"><option value="">Selecione...</option></select></div><button type="button" onclick="BRMembrosSalvar()" class="destaque">Salvar integrantes</button></div>
+ <div id="usuariosGrupo" class="usuarios-grupo"></div>
+ <div id="resumoGrupos" class="info-suave">Nenhum grupo cadastrado.</div>
+</div>
+</div><div id="param_tolerancias" class="param-tela" hidden><div class="config-bloco">
  <div class="config-titulo"><div><h2>Tolerancias por unidade</h2><p>Referencia para a conferencia. Nenhuma divergencia sera aplicada automaticamente.</p></div></div>
  <div class="config-flex"><div class="campo"><label>UNIDADE</label><input id="tolUnidade" maxlength="6" placeholder="KG / MM / PC" autocomplete="off" style="text-transform:uppercase"></div>
  <div class="campo"><label>TOLERANCIA (+/- %)</label><input id="tolPercentual" type="number" min="0" max="100" step="0.01" placeholder="Ex.: 5"></div>
  <button type="button" class="destaque" onclick="BRToleranciaSalvar()">Salvar tolerancia</button></div>
  <p class="info-suave">Exemplos: KG = 5%, MM = 10%, PC = 0%. Valores so valem apos serem salvos.</p>
  <div id="listaTolerancias">Nenhuma tolerancia configurada.</div>
-</div></section>
+</div></div><div id="param_regras" class="param-tela" hidden><div class="config-bloco"><div class="config-titulo"><div><h2>Regras gerais</h2><p>Filtros globais de elegibilidade de materiais.</p></div></div><div id="formConfig"></div></div></div></section>
 <section id="conferencia" class="painel" hidden>
+
+<div class="progresso-painel" id="progressoPainel">
+ <div class="progresso-top"><div><h2>Andamento do inventario</h2><p id="progressoSubtitulo">Empresa selecionada | Deposito 1</p></div>
+ <button type="button" class="mini" onclick="BRAtualizarProgresso()">Atualizar indicadores</button></div>
+ <div class="progresso-barras">
+  <div class="progresso-linha"><span>Contados</span><strong id="pctContados">--%</strong>
+   <div class="progresso-trilho"><div id="barraContados" class="progresso-preenchimento"></div></div></div>
+  <div class="progresso-linha"><span>Inventariados no CPS</span><strong id="pctInventariados">--%</strong>
+   <div class="progresso-trilho"><div id="barraInventariados" class="progresso-preenchimento verde"></div></div></div>
+ </div>
+ <div class="progresso-grid">
+  <div class="progresso-card"><span>Total materiais</span><strong id="pTotal">...</strong></div>
+  <div class="progresso-card"><span>Com reserva</span><strong id="pReservados">...</strong></div>
+  <div class="progresso-card"><span>Sem reserva</span><strong id="pSemReserva">...</strong></div>
+  <div class="progresso-card"><span>Atribuidos</span><strong id="pAtribuidos">...</strong></div>
+  <div class="progresso-card"><span>Sem atribuir</span><strong id="pSemAtribuir">...</strong></div>
+  <div class="progresso-card"><span>Contados</span><strong id="pContados">...</strong></div>
+  <div class="progresso-card"><span>Inventariados</span><strong id="pInventariados">...</strong></div>
+  <div class="progresso-card"><span>Em conferencia</span><strong id="pConferencia">...</strong></div>
+  <div class="progresso-card"><span>Recontagens</span><strong id="pRecontagens">...</strong></div>
+ </div>
+ <p class="progresso-info" id="progressoInfo">Dados consolidados de toda a empresa, deposito 1.</p>
+</div>
 <div class="subtop"><h2>Contagens recebidas</h2><select id="statusConferencia" onchange="BRCarregarConferencia()"><option value="PENDENTE">Pendentes</option><option value="APLICADA">Aplicadas</option><option value="REJEITADA">Rejeitadas</option><option value="RECONTAGEM_SOLICITADA">Recontagens solicitadas</option><option value="TODOS">Todas</option></select></div>
 <div class="recontagem-toolbar">
  <div class="recontagem-cabecalho"><strong>Solicitar recontagem</strong><span id="contadorRecontagem">0 item(ns) selecionado(s)</span><button type="button" class="mini" onclick="BRSelecionarTodasRecontagens()">Selecionar todos da tela</button><button type="button" class="mini" onclick="BRLimparRecontagem()">Desmarcar</button></div>
