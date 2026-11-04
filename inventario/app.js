@@ -5,7 +5,7 @@ var TOKEN=localStorage.getItem("brastorno_token");
 if(!TOKEN){location.replace("../login.html");return;}
 var perfil=null,aba="contagem",empresa=Number(localStorage.getItem("br_invent_empresa")||1),pagina=1,limite=75;
 var itens=[],rascunhos={},temporizador=null,cabecalhoConsulta=null;
-var camposFiltros=["familia","grupo","subgrupo1","subgrupo2","subgrupo3","subgrupo4","subgrupo5","subgrupo6","subgrupo7","local_estoque"];
+var camposFiltros=["familia","grupo","subgrupo1","subgrupo2","subgrupo3","subgrupo4","subgrupo5","subgrupo6","subgrupo7","local_estoque","local_parte1","local_parte2"];
 var filtrosAtivos={};var consultaSerial=0;
 // Origem do material: metodo_reposicao 0 = Compras, 1 = Producao propria.
 // Metodo 2 permanece no filtro Todos ate confirmacao do seu significado.
@@ -81,8 +81,8 @@ function limparDescendentes(campo,selecionados,prefixo){
  // Trocar familia limpa grupo e subgrupos posteriores. O local permanece
  // como filtro independente e tambem restringe as demais opcoes.
  var idx=camposFiltros.indexOf(campo);
- if(idx<0||campo==="local_estoque")return;
- for(var i=idx+1;i<camposFiltros.length-1;i++){
+ if(idx<0||campo.startsWith("local_"))return;
+ for(var i=idx+1;i<camposFiltros.indexOf("local_estoque");i++){
   selecionados[camposFiltros[i]]="";
   var el=$(prefixo+camposFiltros[i]);if(el)el.value="";
  }
@@ -107,7 +107,7 @@ async function carregarFiltros(escopo,tentativa){
    var frag=document.createDocumentFragment();
    var todos=document.createElement("option");todos.value="";todos.textContent="Todos";frag.appendChild(todos);
    opcoes.forEach(function(v){
-    var opt=document.createElement("option");opt.value=v;opt.textContent=puro(v);frag.appendChild(opt);
+    var opt=document.createElement("option");opt.value=v;opt.textContent=v==="__SEM_LOCAL__"?"Sem local de estoque":puro(v);frag.appendChild(opt);
    });
    el.replaceChildren(frag);
    if(atual&&opcoes.indexOf(atual)<0){
@@ -239,17 +239,27 @@ function atualizaSelecionados(){
 }
 function montarContagem(){
  $("acaoContagem").hidden=false;
- var out="<div class='tabela'><table><thead><tr><th>Codigo</th><th>Material</th><th>Familia</th><th>Grupo</th><th>Subgrupos 1 a 7</th><th>Unid.</th><th>Local de estoque</th><th>Contagem fisica</th><th>Lotes / Series</th></tr></thead><tbody>";
+ // Contagem cega: SEM saldo CPS, reservado, familia/grupo/subgrupos ou custo.
+ // As classificacoes permanecem disponiveis APENAS nos filtros.
+ var out="<div class='tabela contagem-wrap'><table class='contagem-tabela'>"+
+  "<thead><tr><th>Codigo</th><th>Material</th><th>Unid.</th><th>Local de estoque</th><th>Contagem fisica</th><th>Lotes / Series</th></tr></thead><tbody>";
  itens.forEach(function(p){
   var cod=p.cod_produto,lote=[1,2,3].includes(Number(p.tipo_controle)),d=rascunhos[cod];
-  out+="<tr>"+rowsBase(p);
-  out+="<td>"+(lote?"<span class='contagem-valor'>"+(d?fmt(d.qtde):"Nao contada")+"</span>":
-     "<input class='qtd' type='number' step='any' min='0' placeholder='Contar...' value='"+(d?esc(d.qtde):"")+
-     "' oninput='BRQtd("+cod+",this.value)' autocomplete='off'>")+"</td>";
-  out+="<td>"+(lote?"<button class='mini' onclick='BRLotes("+cod+")'>Contar lotes</button>":"")+
-    (p.lotes&&p.lotes.length?"<small>"+p.lotes.length+" lote(s) identificado(s)</small>":"")+"</td></tr>";
+  var localTexto=local(p), nome=p.codigo_interno||p.cod_produto;
+  out+="<tr class='contagem-linha'>"+
+   "<td class='contagem-codigo'><strong>"+esc(nome)+"</strong><small>#"+esc(p.cod_produto)+"</small></td>"+
+   "<td class='contagem-material'>"+esc(p.produto||"")+"</td>"+
+   "<td class='contagem-unidade'>"+esc(p.unidade||"")+"</td>"+
+   "<td class='contagem-local'>"+(localTexto?esc(localTexto):"<span class='sem-local'>Sem local informado</span>")+"</td>"+
+   "<td class='contagem-input'>"+(lote?
+      "<span class='contagem-valor'>"+(d?fmt(d.qtde):"Nao contada")+"</span>":
+      "<input class='qtd' type='number' inputmode='decimal' step='any' min='0' placeholder='Contar...' value='"+(d?esc(d.qtde):"")+
+      "' oninput='BRQtd("+cod+",this.value)' autocomplete='off' aria-label='Quantidade contada do material "+esc(nome)+"'>")+
+   "</td>"+
+   "<td class='contagem-lotes'>"+(lote?"<button class='mini' onclick='BRLotes("+cod+")'>Contar lotes</button>":"")+"</td></tr>";
  });
- $("lista").innerHTML=out+(itens.length?"":"<tr><td colspan='9'>Nenhum material encontrado.</td></tr>")+"</tbody></table></div>";
+ $("lista").innerHTML=out+(itens.length?"":"<tr><td colspan='6'>Nenhum material atribuido neste filtro.</td></tr>")+
+  "</tbody></table></div>";
  atualizaSelecionados();
 }
 function lotes(cod){
