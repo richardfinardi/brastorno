@@ -7,10 +7,9 @@ var perfil=null,aba="contagem",empresa=Number(localStorage.getItem("br_invent_em
 var itens=[],rascunhos={},temporizador=null,cabecalhoConsulta=null;
 var camposFiltros=["familia","grupo","subgrupo1","subgrupo2","subgrupo3","subgrupo4","subgrupo5","subgrupo6","subgrupo7","local_estoque","local_parte1","local_parte2"];
 var filtrosAtivos={};var consultaSerial=0;
-// Origem do material: metodo_reposicao 0 = Compras, 1 = Producao propria.
-// Metodo 2 permanece no filtro Todos ate confirmacao do seu significado.
+// Origem do material: 0 = Compras, 1 = Producao propria, 2 = Producao terceiros.
 var metodoReposicao=localStorage.getItem("br_inv_metodo_reposicao")||"";
-if(!["","0","1"].includes(metodoReposicao))metodoReposicao="";
+if(!["","0","1","2"].includes(metodoReposicao))metodoReposicao="";
 var equipes=[],usuariosInventario=[];
 var selecaoRecontagem=new Set();
 var contagensRecontagem=[];
@@ -51,7 +50,7 @@ function trocarAba(id){
  ["reservados","contagem","parametrizacoes","conferencia"].forEach(function(x){$(x).hidden=x!==id});
  $("tituloAba").textContent=({"reservados":"Itens reservados","contagem":"Contagem","parametrizacoes":"Parametrizacoes","conferencia":"Conferencia"})[id];
  $("filtros").hidden=false; // Filtros disponiveis nas quatro abas
- $("blocoFiltroOrigem").hidden=(id==="parametrizacoes");
+ $("blocoFiltroOrigem").hidden=false;
  $("exportarInventario").hidden=(id!=="reservados");
  aviso("");
  if(id==="parametrizacoes"){carregarConfig();carregarEquipes();carregarFiltros("dist");}
@@ -69,8 +68,8 @@ var filtrosDist={},serieFiltrosDist=0;
 function queryFiltros(escopo,selecionados){
  var modo=escopo==="dist"?"parametrizacoes":aba;
  var q="/brastorno/inventario/filtros?cod_empresa="+empresa+"&modo="+modo;
- if(escopo==="main"&&aba!=="parametrizacoes"&&metodoReposicao!=="")
-   q+="&metodo_reposicao="+metodoReposicao;
+ var origem=escopo==="dist"?String(selecionados.metodo_reposicao||""):metodoReposicao;
+ if(origem!=="")q+="&metodo_reposicao="+encodeURIComponent(origem);
  if(escopo==="main")q+="&busca="+encodeURIComponent($("pesquisa").value.trim());
  camposFiltros.forEach(function(k){
   if(selecionados[k])q+="&"+k+"="+encodeURIComponent(selecionados[k]);
@@ -143,6 +142,7 @@ function aplicarFiltro(campo){
 }
 function aplicarFiltroDist(campo){
  camposFiltros.forEach(function(k){var x=$("dist_"+k);filtrosDist[k]=x?x.value:""});
+ filtrosDist.metodo_reposicao=$("distMetodoReposicao").value;
  limparDescendentes(campo,filtrosDist,"dist_");
  carregarFiltros("dist");
 }
@@ -168,7 +168,7 @@ function recarregarAba(){
 }
 function parametrosFiltros(){
  var q="&busca="+encodeURIComponent($("pesquisa").value.trim());
- if(aba!=="parametrizacoes"&&metodoReposicao!=="")q+="&metodo_reposicao="+metodoReposicao;
+ if(metodoReposicao!=="")q+="&metodo_reposicao="+metodoReposicao;
  camposFiltros.forEach(function(k){if(filtrosAtivos[k])q+="&"+k+"="+encodeURIComponent(filtrosAtivos[k])});
  return q;
 }
@@ -589,6 +589,7 @@ async function distribuir(){
  if(vals.some(function(n){return !Number.isInteger(n)||n<=0})){aviso("Codigos de produtos invalidos.",true);return}
  var filtros={};
  camposFiltros.forEach(function(k){var x=$("dist_"+k);if(x&&x.value)filtros[k]=x.value});
+ if($("distMetodoReposicao").value!=="")filtros.metodo_reposicao=$("distMetodoReposicao").value;
  var busca=$("buscaDistribuicao").value.trim();
  if(!codes&&!busca&&!Object.keys(filtros).length){aviso("Informe produtos ou filtros para distribuir.",true);return}
  if(!confirm("Atribuir materiais selecionados? Itens ja atribuidos serao ignorados."))return;
@@ -664,6 +665,7 @@ async function removerLote(todos){
    grupo_id:filtros.grupo_id,usuario_atribuido:filtros.usuario,todos_filtrados:!!todos,
    busca:$("pesquisa").value.trim(),filtros:{}};
  camposFiltros.forEach(function(k){if(filtrosAtivos[k])payload.filtros[k]=filtrosAtivos[k]});
+ if(metodoReposicao!=="")payload.filtros.metodo_reposicao=metodoReposicao;
  try{
   $("btnRemoverSelecionados").disabled=true;$("btnRemoverFiltrados").disabled=true;
   var r=await api("/brastorno/inventario/atribuicoes/remover-lote","POST",payload);
