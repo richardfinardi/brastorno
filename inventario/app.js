@@ -722,7 +722,7 @@ function previewParams(){
   "&pagina="+previewPagina+"&limite=50"+
   "&busca="+encodeURIComponent($("buscaDistribuicao").value.trim());
  camposFiltros.forEach(function(k){if(filtrosDist[k])q+="&"+k+"="+encodeURIComponent(filtrosDist[k])});
- if(filtrosDist.metodo_reposicao!=="")q+="&metodo_reposicao="+encodeURIComponent(filtrosDist.metodo_reposicao||"");
+ if(filtrosDist.metodo_reposicao!==undefined&&filtrosDist.metodo_reposicao!=="")q+="&metodo_reposicao="+encodeURIComponent(filtrosDist.metodo_reposicao||"");
  return q;
 }
 function contarSelecionadosPreview(){
@@ -810,7 +810,7 @@ async function distribuirFiltrados(){
  var dest=destinoSelecionado();if(!dest)return;
  var filtros={};
  camposFiltros.forEach(function(k){if(filtrosDist[k])filtros[k]=filtrosDist[k]});
- if(filtrosDist.metodo_reposicao!=="")filtros.metodo_reposicao=filtrosDist.metodo_reposicao;
+ if(filtrosDist.metodo_reposicao!==undefined&&filtrosDist.metodo_reposicao!=="")filtros.metodo_reposicao=filtrosDist.metodo_reposicao;
  var busca=$("buscaDistribuicao").value.trim();
  if(!busca&&!Object.keys(filtros).length){
   aviso("Selecione um filtro ou pesquise antes de atribuir em lote.",true);return;
