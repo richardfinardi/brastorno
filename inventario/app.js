@@ -889,16 +889,61 @@ function desmarcarContados(){
 function contadosPaginaAlterar(n){
  contadosPagina=Math.max(1,contadosPagina+n);carregarContados();
 }
+function urlContados(exportar){
+ var busca=($("buscaContados").value.trim()||$("pesquisa").value.trim());
+ var q="/brastorno/inventario/contados"+(exportar?"/exportar":"")+
+   "?cod_empresa="+empresa;
+ if(!exportar)q+="&pagina="+contadosPagina+"&limite=80";
+ q+="&status="+encodeURIComponent($("statusContados").value)+"&busca="+encodeURIComponent(busca);
+ if(metodoReposicao!=="")q+="&metodo_reposicao="+encodeURIComponent(metodoReposicao);
+ camposFiltros.forEach(function(k){if(filtrosAtivos[k])q+="&"+k+"="+encodeURIComponent(filtrosAtivos[k])});
+ return q;
+}
+async function exportarContadosExcel(){
+ if(!isGestor()){aviso("Acesso exclusivo de gestor.",true);return}
+ var t=localStorage.getItem("brastorno_token");
+ if(!t){location.replace("../login.html");return}
+ var btn=$("btnExportarContados"),texto=btn.textContent;
+ btn.disabled=true;btn.textContent="Gerando Excel...";
+ try{
+  // Exporta TODOS os itens do filtro, nao apenas a pagina atualmente exibida.
+  var r=await fetch(API+urlContados(true),{
+   method:"GET",headers:{"Authorization":"Bearer "+t,
+     "Accept":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+   cache:"no-store"
+  });
+  if(r.status===401){
+   localStorage.removeItem("brastorno_token");location.replace("../login.html");return
+  }
+  if(!r.ok){
+   var msg="Erro HTTP "+r.status;
+   try{
+    var data=await r.json();
+    msg=typeof data.detail==="string"?data.detail:
+       Array.isArray(data.detail)?data.detail.map(function(x){return x.msg}).join("; "):msg;
+   }catch(e){}
+   throw new Error(msg);
+  }
+  var blob=await r.blob();
+  if(!blob.size)throw new Error("O servidor retornou um arquivo vazio.");
+  var url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;
+  var dataNome=new Date().toLocaleDateString("en-CA").replace(/-/g,"");
+  a.download="BRASTORNO_CONTADOS_EMPRESA_"+empresa+"_"+dataNome+".xlsx";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url)},1000);
+  aviso("Excel gerado. Incluidos saldo CPS, reservado, contado, diferenca, tolerancia, custo unitario e impacto.");
+ }catch(e){aviso("Erro ao exportar contados: "+erroMsg(e),true)}
+ finally{btn.disabled=false;btn.textContent=texto}
+}
+window.BRExportarContadosExcel=exportarContadosExcel;
+
 async function carregarContados(){
  if(aba!=="contados")return;
  var e=empresa,request=++serieContados;
  $("listaContados").innerHTML="<div class='carregando'>Consultando contagens...</div>";
  try{
-  var busca=($("buscaContados").value.trim()||$("pesquisa").value.trim());
-  var q="/brastorno/inventario/contados?cod_empresa="+empresa+"&pagina="+contadosPagina+
-    "&limite=80&status="+encodeURIComponent($("statusContados").value)+"&busca="+encodeURIComponent(busca);
-  if(metodoReposicao!=="")q+="&metodo_reposicao="+encodeURIComponent(metodoReposicao);
-  camposFiltros.forEach(function(k){if(filtrosAtivos[k])q+="&"+k+"="+encodeURIComponent(filtrosAtivos[k])});
+  var q=urlContados(false);
   var d=await api(q);
   if(e!==empresa||request!==serieContados||aba!=="contados")return;
   contadosAtuais=d.materiais||[];
