@@ -1,7 +1,7 @@
 <!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inventario | Brastorno</title><meta name="robots" content="noindex,nofollow"><link rel="icon" href="../controle_fabrica/favicon.png"><link rel="stylesheet" href="./style.css"></head><body>
 <header class="site-header"><div class="site-head"><div class="site-brand"><img class="client-brand-logo" src="../controle_fabrica/brastorno_logo.png" alt="Brastorno"><span class="brand-divider" aria-hidden="true"></span><div class="brand-copy"><strong>INVENTARIO</strong><small>Gestao de materiais e contagem</small></div><span class="brand-divider" aria-hidden="true"></span><img class="partner-brand-logo" src="../LOGO.PNG" alt="Consultoria.RF"></div><div class="site-actions"><span id="usuario" style="font-size:12px;font-weight:800"></span><a class="site-action" href="../">Menu</a><button class="site-action" onclick="BRLogout()">Sair</button></div></div></header>
 <main id="corpo"><div class="cabecalho page-hero"><div><div class="page-eyebrow">GESTAO INDUSTRIAL</div><h1 id="tituloAba">Contagem</h1><p class="page-subtitle">Deposito 1 | Materia-prima e produtos acabados</p></div><div class="campo"><label>EMPRESA</label><select id="empresa" onchange="BREmpresa(this.value)"><option value="1">Empresa 1</option><option value="2">Empresa 2</option><option value="3">Empresa 3</option><option value="4">Empresa 4</option><option value="5">Empresa 5</option><option value="6">Empresa 6</option></select></div></div>
-<div class="abas"><button data-aba="reservados" data-gestor onclick="BRAba('reservados')">Itens reservados</button><button data-aba="contagem" onclick="BRAba('contagem')">Contagem</button><button data-aba="parametrizacoes" data-gestor onclick="BRAba('parametrizacoes')">Parametrizacoes</button><button data-aba="conferencia" data-gestor onclick="BRAba('conferencia')">Conferencia</button></div>
+<div class="abas"><button data-aba="reservados" data-gestor onclick="BRAba('reservados')">Itens reservados</button><button data-aba="contagem" onclick="BRAba('contagem')">Contagem</button><button data-aba="parametrizacoes" data-gestor onclick="BRAba('parametrizacoes')">Parametrizacoes</button><button data-aba="conferencia" data-gestor onclick="BRAba('conferencia')">Conferencia</button><button data-aba="contados" data-gestor onclick="BRAba('contados')">Contados</button></div>
 <div id="aviso" class="aviso" role="status"></div>
 <div id="filtros" class="filtros"><div class="campo busca"><label>PESQUISAR MATERIAL, CODIGO OU LOCAL</label><input id="pesquisa" placeholder="Pesquisar..." autocomplete="off"></div><button type="button" id="btnFiltro" aria-controls="painelFiltros" onclick="BRToggleFiltros()">Filtros</button><button type="button" id="limparBusca">Limpar busca</button><button type="button" onclick="BRExportar()" data-gestor id="exportarInventario">Exportar CSV (pagina)</button><div id="painelFiltros" hidden><div class="campos-filtros"><div class="campo filtro-item" id="blocoFiltroOrigem"><label for="filtroMetodoReposicao">Origem do material</label><select id="filtroMetodoReposicao" onchange="BRFiltrarMetodoReposicao()"><option value="">Todos</option><option value="0">Compras</option><option value="1">Producao propria</option><option value="2">Producao terceiros</option></select></div><div class="campo filtro-item"><label for="filtro_familia">Familia</label><select id="filtro_familia" onchange="BRFiltrar('familia')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_grupo">Grupo</label><select id="filtro_grupo" onchange="BRFiltrar('grupo')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_subgrupo1">Subgrupo 1</label><select id="filtro_subgrupo1" onchange="BRFiltrar('subgrupo1')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_subgrupo2">Subgrupo 2</label><select id="filtro_subgrupo2" onchange="BRFiltrar('subgrupo2')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_subgrupo3">Subgrupo 3</label><select id="filtro_subgrupo3" onchange="BRFiltrar('subgrupo3')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_subgrupo4">Subgrupo 4</label><select id="filtro_subgrupo4" onchange="BRFiltrar('subgrupo4')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_subgrupo5">Subgrupo 5</label><select id="filtro_subgrupo5" onchange="BRFiltrar('subgrupo5')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_subgrupo6">Subgrupo 6</label><select id="filtro_subgrupo6" onchange="BRFiltrar('subgrupo6')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_subgrupo7">Subgrupo 7</label><select id="filtro_subgrupo7" onchange="BRFiltrar('subgrupo7')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_local_estoque">Local completo (inclui sem local)</label><select id="filtro_local_estoque" onchange="BRFiltrar('local_estoque')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_local_parte1">Setor / antes da barra</label><select id="filtro_local_parte1" onchange="BRFiltrar('local_parte1')"><option value="">Todos</option></select></div><div class="campo filtro-item"><label for="filtro_local_parte2">Posicao / depois da barra</label><select id="filtro_local_parte2" onchange="BRFiltrar('local_parte2')"><option value="">Todos</option></select></div></div><div class="acoes-filtros"><span id="msgFiltros">Carregando filtros...</span><button type="button" onclick="BRLimparFiltros()">Limpar filtros</button></div></div></div>
 <section id="reservados" hidden><div class="subtop"><p id="resumo"></p></div></section>
@@ -80,6 +80,45 @@
  <p class="info-suave">Exemplos: KG = 5%, MM = 10%, PC = 0%. Valores so valem apos serem salvos.</p>
  <div id="listaTolerancias">Nenhuma tolerancia configurada.</div>
 </div></div><div id="param_regras" class="param-tela" hidden><div class="config-bloco"><div class="config-titulo"><div><h2>Regras gerais</h2><p>Filtros globais de elegibilidade de materiais.</p></div></div><div id="formConfig"></div></div></div></section>
+
+<section id="contados" class="painel" data-gestor hidden>
+ <div class="subtop"><div><h2>Materiais contados</h2><p class="info-suave">Historico de contagens por material, inclusive rejeitadas e recontagens.</p></div>
+  <button type="button" class="mini" onclick="BRCarregarContados()">Atualizar lista</button></div>
+ <div class="config-flex contados-filtros">
+  <div class="campo campo-longo"><label>PESQUISAR MATERIAL</label><input id="buscaContados" placeholder="Codigo ou descricao" autocomplete="off"></div>
+  <div class="campo"><label>ULTIMO STATUS</label><select id="statusContados" onchange="BRCarregarContados()">
+    <option value="TODOS">Todos</option><option value="PENDENTE">Em conferencia</option>
+    <option value="APLICADA">Aplicada no CPS</option><option value="REJEITADA">Rejeitada</option>
+    <option value="RECONTAGEM_SOLICITADA">Recontagem solicitada</option></select></div>
+ </div>
+ <div class="contados-acoes">
+  <strong id="totalContadosListagem">Carregando...</strong>
+  <span id="selecionadosContados">0 selecionados</span>
+  <button class="mini" type="button" onclick="BRMarcarPaginaContados()">Selecionar pagina</button>
+  <button class="mini" type="button" onclick="BRDesmarcarContados()">Desmarcar</button>
+ </div>
+ <div id="listaContados" class="contados-lista">Carregando contagens...</div>
+ <div id="paginacaoContados" class="paginacao-disponiveis"></div>
+ <div class="contados-operacoes">
+  <div class="contados-operacao">
+   <h3>Solicitar recontagem</h3>
+   <p class="info-suave">Direcione os itens selecionados para outra pessoa ou equipe. Historico preservado.</p>
+   <div class="config-flex">
+    <div class="campo"><label>ENCAMINHAR PARA</label><select id="tipoDestinoContados" onchange="BRDestinoContados()"><option value="usuario">Pessoa</option><option value="grupo">Grupo de contagem</option></select></div>
+    <div class="campo campo-longo" id="blocoPessoaContados"><label>PESSOA</label><select id="pessoaContados"><option value="">Selecione...</option></select></div>
+    <div class="campo campo-longo" id="blocoGrupoContados" hidden><label>GRUPO</label><select id="grupoContados"><option value="">Selecione...</option></select></div>
+    <div class="campo campo-longo"><label>MOTIVO</label><input id="motivoContados" maxlength="500" placeholder="Motivo da recontagem"></div>
+    <button type="button" class="destaque" id="btnRecontarContados" onclick="BRRecontarContados()" disabled>Encaminhar recontagem</button>
+   </div>
+  </div>
+  <div class="contados-operacao contados-alerta">
+   <h3>Desconsiderar contagens de teste</h3>
+   <p class="info-suave">Exclui somente do progresso e libera os materiais para nova distribuicao. <b>NAO desfaz ajustes do CPS, saldo ou Kardex.</b> Historico auditado.</p>
+   <button type="button" class="botao-perigo" id="btnLimparContados" onclick="BRDesconsiderarTestes()" disabled>Desconsiderar testes selecionados</button>
+  </div>
+ </div>
+</section>
+
 <section id="conferencia" class="painel" hidden>
 
 <div class="progresso-painel" id="progressoPainel">
@@ -92,17 +131,17 @@
    <div class="progresso-trilho"><div id="barraInventariados" class="progresso-preenchimento verde"></div></div></div>
  </div>
  <div class="progresso-grid">
-  <div class="progresso-card"><span>Total materiais</span><strong id="pTotal">...</strong></div>
-  <div class="progresso-card"><span>Com reserva</span><strong id="pReservados">...</strong></div>
-  <div class="progresso-card"><span>Sem reserva</span><strong id="pSemReserva">...</strong></div>
-  <div class="progresso-card"><span>Atribuidos</span><strong id="pAtribuidos">...</strong></div>
-  <div class="progresso-card"><span>Sem atribuir</span><strong id="pSemAtribuir">...</strong></div>
-  <div class="progresso-card"><span>Contados</span><strong id="pContados">...</strong></div>
-  <div class="progresso-card"><span>Inventariados</span><strong id="pInventariados">...</strong></div>
-  <div class="progresso-card"><span>Em conferencia</span><strong id="pConferencia">...</strong></div>
-  <div class="progresso-card"><span>Recontagens</span><strong id="pRecontagens">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('total_materiais')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('total_materiais')}"><span>Total materiais</span><strong id="pTotal">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('com_reserva')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('com_reserva')}"><span>Com reserva</span><strong id="pReservados">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('sem_reserva')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('sem_reserva')}"><span>Sem reserva</span><strong id="pSemReserva">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('atribuidos')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('atribuidos')}"><span>Atribuidos</span><strong id="pAtribuidos">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('sem_atribuir')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('sem_atribuir')}"><span>Sem atribuir</span><strong id="pSemAtribuir">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('contados')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('contados')}"><span>Contados</span><strong id="pContados">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('inventariados')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('inventariados')}"><span>Inventariados</span><strong id="pInventariados">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('em_conferencia')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('em_conferencia')}"><span>Em conferencia</span><strong id="pConferencia">...</strong></div>
+  <div class="progresso-card kpi-clicavel" role="button" tabindex="0" title="Ver os materiais deste indicador" onclick="BRDetalharKPI('recontagens')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();BRDetalharKPI('recontagens')}"><span>Recontagens</span><strong id="pRecontagens">...</strong></div>
  </div>
- <p class="progresso-info" id="progressoInfo">Dados consolidados de toda a empresa, deposito 1.</p>
+ <p class="progresso-info" id="progressoInfo">Clique em qualquer indicador para identificar os materiais. Os status podem se sobrepor.</p>
 </div>
 <div class="subtop"><h2>Contagens recebidas</h2><select id="statusConferencia" onchange="BRCarregarConferencia()"><option value="PENDENTE">Pendentes</option><option value="APLICADA">Aplicadas</option><option value="REJEITADA">Rejeitadas</option><option value="RECONTAGEM_SOLICITADA">Recontagens solicitadas</option><option value="TODOS">Todas</option></select></div>
 <div class="recontagem-toolbar">
