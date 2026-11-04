@@ -83,7 +83,7 @@
 
 <section id="contados" class="painel" data-gestor hidden>
  <div class="subtop"><div><h2>Materiais contados</h2><p class="info-suave">Historico de contagens por material, inclusive rejeitadas e recontagens.</p></div>
-  <button type="button" class="mini" onclick="BRCarregarContados()">Atualizar lista</button></div>
+  <div class="contados-cabecalho-acoes"><button type="button" class="mini" onclick="BRCarregarContados()">Atualizar lista</button><button type="button" class="mini destaque" id="btnExportarContados" onclick="BRExportarContadosExcel()">Exportar Excel</button></div></div>
  <div class="config-flex contados-filtros">
   <div class="campo campo-longo"><label>PESQUISAR MATERIAL</label><input id="buscaContados" placeholder="Codigo ou descricao" autocomplete="off"></div>
   <div class="campo"><label>ULTIMO STATUS</label><select id="statusContados" onchange="BRCarregarContados()">
