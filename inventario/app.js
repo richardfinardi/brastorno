@@ -44,6 +44,65 @@ async function api(caminho,metodo,body){
  return val;
 }
 function isGestor(){return perfil&&perfil.inventario_gestor}
+var aplicarCpsHabilitado=false, aplicarCpsDisponivel=false, aplicacaoCpsErro="";
+var consultaPermissaoCps=0;
+function atualizarVisaoAplicarCps(){
+ var status=$("statusAplicarCps"),btn=$("btnAlterarAplicarCps"),descricao=$("descricaoAplicarCps");
+ if(!status||!btn||!descricao)return;
+ status.className="aplicar-cps-status "+(aplicarCpsHabilitado?"ativo":"inativo");
+ status.textContent=aplicarCpsHabilitado?"ATIVADO":"DESATIVADO";
+ btn.textContent=aplicarCpsHabilitado?"Desativar aplicacao no CPS":"Ativar aplicacao no CPS";
+ btn.className=aplicarCpsHabilitado?"botao-desativar-cps":"botao-ativar-cps";
+ btn.disabled=!aplicarCpsDisponivel;
+ descricao.textContent=aplicacaoCpsErro?aplicacaoCpsErro:
+  (aplicarCpsHabilitado?"Os gestores podem aplicar os ajustes desta empresa pelo fluxo de Conferencia.":
+  "Os ajustes desta empresa estao BLOQUEADOS. Rejeitar e Recontar continuam disponiveis.");
+}
+async function carregarPermissaoCps(){
+ var eAtual=empresa,req=++consultaPermissaoCps,antes=aplicarCpsHabilitado;
+ aplicarCpsHabilitado=false;aplicarCpsDisponivel=false;
+ aplicacaoCpsErro="Consultando permissao na API...";atualizarVisaoAplicarCps();
+ try{
+  var r=await api("/brastorno/inventario/aplicacao-cps?cod_empresa="+eAtual);
+  if(eAtual!==empresa||req!==consultaPermissaoCps)return;
+  aplicarCpsHabilitado=(r.habilitado===true);
+  aplicarCpsDisponivel=true;aplicacaoCpsErro="";
+ }catch(e){
+  if(eAtual!==empresa||req!==consultaPermissaoCps)return;
+  aplicarCpsHabilitado=false;aplicarCpsDisponivel=false;
+  aplicacaoCpsErro="Protecao da API indisponivel. Aplicar no CPS permanece BLOQUEADO. Instale a versao V3.4 na API. "+erroMsg(e);
+ }
+ atualizarVisaoAplicarCps();
+ if(aba==="conferencia"&&(antes!==aplicarCpsHabilitado||aplicarCpsHabilitado))carregarConferencia();
+}
+async function alternarAplicarCps(){
+ if(!isGestor()||!aplicarCpsDisponivel){
+  aviso("A configuracao do CPS ainda nao esta disponivel no servidor.",true);return;
+ }
+ var habilitar=!aplicarCpsHabilitado;
+ var confirmar="";
+ if(habilitar){
+  confirmar=prompt("Esta operacao liberara AJUSTES REAIS de estoque no CPS para a empresa "+empresa+".\n\nDigite exatamente LIBERAR APLICAR NO CPS:","");
+  if(confirmar!=="LIBERAR APLICAR NO CPS"){aviso("Ativacao cancelada. Estoque protegido.",true);return}
+ }else if(!confirm("DESATIVAR aplicacao no CPS para a empresa "+empresa+"? A Conferencia continuara disponivel."))return;
+ var botao=$("btnAlterarAplicarCps"),eAtual=empresa;
+ botao.disabled=true;
+ try{
+  var r=await api("/brastorno/inventario/aplicacao-cps","POST",
+    {cod_empresa:eAtual,habilitado:habilitar,confirmacao:confirmar});
+  if(eAtual!==empresa)return;
+  aplicarCpsHabilitado=(r.habilitado===true);
+  aplicarCpsDisponivel=true;aplicacaoCpsErro="";
+  atualizarVisaoAplicarCps();
+  aviso(aplicarCpsHabilitado?"Aplicar no CPS ATIVADO para a empresa "+empresa+".":
+    "Aplicar no CPS DESATIVADO para a empresa "+empresa+". Nenhum estoque alterado.");
+ }catch(e){
+  aviso("Nao foi possivel alterar a permissao: "+erroMsg(e),true);
+  if(eAtual===empresa)await carregarPermissaoCps();
+ }finally{if(eAtual===empresa)atualizarVisaoAplicarCps()}
+}
+window.BRAlternarAplicarCps=alternarAplicarCps;
+
 function trocarAba(id){
  if(id!=="contagem"&&!isGestor())return;
  aba=id;pagina=1;localStorage.setItem("br_invent_aba",id);
@@ -58,13 +117,14 @@ function trocarAba(id){
  $("exportarInventario").hidden=(id!=="reservados");
  aviso("");
  if(id==="parametrizacoes"){carregarConfig();carregarEquipes();carregarFiltros("dist");paramAba(paramAbaAtual);}
- else if(id==="conferencia"){carregarDestinosRecontagem();carregarConferencia();atualizarProgresso()}
+ else if(id==="conferencia"){carregarDestinosRecontagem();carregarConferencia();carregarPermissaoCps();atualizarProgresso()}
  else if(id==="contados"){contadosPagina=1;carregarContados();carregarDestinosContados()}
  else carregarItens();
  carregarFiltros("main");
 }
 function setEmpresa(v){
  empresa=Number(v)||1;pagina=1;rascunhos={};filtrosAtivos={};filtrosDist={};previewPagina=1;previewSelecionados.clear();
+ aplicarCpsHabilitado=false;aplicarCpsDisponivel=false;consultaPermissaoCps++;atualizarVisaoAplicarCps();
  localStorage.setItem("br_invent_empresa",empresa);
  camposFiltros.forEach(function(k){var el=$("filtro_"+k);if(el)el.value=""});
  trocarAba(aba)
@@ -368,7 +428,7 @@ async function carregarConferencia(){
       "<td>"+(r.status==="PENDENTE"?(abaixo?
          "<span class='motivo-bloqueio'>Gravacao bloqueada. Encaminhe para outra contagem.</span>"+
          "<button class='mini' onclick='BRRecontarItem(\""+esc(r.id)+"\")'>Solicitar recontagem</button>":
-         "<button class='mini destaque' onclick='BRDecidir(\""+esc(r.id)+"\",true)'>Aplicar no CPS</button>"+
+         (aplicarCpsHabilitado?"<button class='mini destaque' onclick='BRDecidir(\""+esc(r.id)+"\",true)'>Aplicar no CPS</button>":"")+
          "<button class='mini' onclick='BRDecidir(\""+esc(r.id)+"\",false)'>Rejeitar</button>"+
          "<button class='mini' onclick='BRRecontarItem(\""+esc(r.id)+"\")'>Recontar</button>"):
         (r.status==="APLICADA"?"<button class='mini' onclick='BRRecontarItem(\""+esc(r.id)+"\")'>Recontar</button>":""))+"</td></tr>";
@@ -504,6 +564,7 @@ window.BRDestinoRecontagem=destinoRecontagem;
 window.BRSolicitarRecontagem=solicitarRecontagem;
 
 async function decidir(id,aplicar){
+ if(aplicar&&!aplicarCpsHabilitado){aviso("Aplicar no CPS esta DESATIVADO em Parametrizacoes > 5. Regras.",true);return}
  if(!confirm(aplicar?"CONFIRMAR GRAVACAO REAL NO CPS? O estoque sera ajustado e registrado no Kardex.":"Rejeitar esta contagem?"))return;
  try{
   var acao=aplicar?"aplicar":"rejeitar";
@@ -720,6 +781,7 @@ function paramAba(id){
  });
  if(id==="distribuir")carregarDisponiveis();
  else if(id==="distribuidos")carregarAtribuicoes();
+ else if(id==="regras")carregarPermissaoCps();
 }
 function previewParams(){
  var q="/brastorno/inventario/disponiveis?cod_empresa="+empresa+
