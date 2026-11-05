@@ -55,7 +55,7 @@ function atualizarVisaoAplicarCps(){
  btn.className=aplicarCpsHabilitado?"botao-desativar-cps":"botao-ativar-cps";
  btn.disabled=!aplicarCpsDisponivel;
  descricao.textContent=aplicacaoCpsErro?aplicacaoCpsErro:
-  (aplicarCpsHabilitado?"Os gestores podem aplicar os ajustes desta empresa pelo fluxo de Conferencia.":
+  (aplicarCpsHabilitado?"A Conferencia pode solicitar ajustes desta empresa, respeitando tambem as travas de seguranca V2.2.":
   "Os ajustes desta empresa estao BLOQUEADOS. Rejeitar e Recontar continuam disponiveis.");
 }
 async function carregarPermissaoCps(){
