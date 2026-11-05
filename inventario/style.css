@@ -307,3 +307,19 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
 .botoes-contados .botao-teste:hover{border-color:#b14a5c;background:#fff0f1}
 .erro-contados{border:1px solid #ecc3cb;background:#fff0f3;color:#a22b42;padding:12px 14px;border-radius:10px;margin:10px 0;font-size:12px;font-weight:700;line-height:1.5}
 .erro-contados[hidden]{display:none!important}
+
+
+/* V3.4 - trava controlada pelo gestor (CPS) */
+.aplicar-cps-card{background:#f8fafc;border:1px solid #dae3ee;padding:17px 18px;border-radius:12px;margin:10px 0 18px;max-width:900px}
+.aplicar-cps-linha{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.aplicar-cps-titulo{display:block;font-weight:900;color:#142446;font-size:15px;margin-bottom:8px}
+.aplicar-cps-status{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 10px;font-weight:900;font-size:11px}
+.aplicar-cps-status.inativo{background:#ffeded;color:#a42e41;border:1px solid #eac6ce}
+.aplicar-cps-status.ativo{background:#e8f2df;color:#466f27;border:1px solid #cadebd}
+.botao-ativar-cps{background:#708e34;color:#fff;border-color:#708e34;min-height:42px}
+.botao-ativar-cps:hover{background:#5f7c2c;color:#fff}
+.botao-desativar-cps{background:#a63349;color:#fff;border-color:#a63349;min-height:42px}
+.botao-desativar-cps:hover{background:#90263a;color:#fff}
+.aplicar-cps-card button:disabled{background:#e5e9ef;color:#7f8fa3;border-color:#d7dfe8}
+.aplicar-cps-card .info-suave{font-size:11px;line-height:1.5;margin:12px 0 0}
+@media(max-width:650px){.aplicar-cps-linha{align-items:stretch}.aplicar-cps-linha button{width:100%}}
