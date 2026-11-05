@@ -79,7 +79,24 @@
  <button type="button" class="destaque" onclick="BRToleranciaSalvar()">Salvar tolerancia</button></div>
  <p class="info-suave">Exemplos: KG = 5%, MM = 10%, PC = 0%. Valores so valem apos serem salvos.</p>
  <div id="listaTolerancias">Nenhuma tolerancia configurada.</div>
-</div></div><div id="param_regras" class="param-tela" hidden><div class="config-bloco"><div class="config-titulo"><div><h2>Regras gerais</h2><p>Filtros globais de elegibilidade de materiais.</p></div></div><div id="formConfig"></div></div></div></section>
+</div></div><div id="param_regras" class="param-tela" hidden>
+ <div class="config-bloco">
+  <div class="config-titulo"><div><h2>Aplicacao de estoque no CPS</h2>
+   <p>Controle exclusivo do gestor. A permissao e individual por empresa.</p></div></div>
+  <div class="aplicar-cps-card">
+   <div class="aplicar-cps-linha">
+    <div>
+     <span class="aplicar-cps-titulo">Permitir aplicar no CPS</span>
+     <div id="statusAplicarCps" class="aplicar-cps-status inativo">DESATIVADO</div>
+    </div>
+    <button type="button" id="btnAlterarAplicarCps" class="botao-ativar-cps" onclick="BRAlternarAplicarCps()" disabled>Ativar aplicacao no CPS</button>
+   </div>
+   <p id="descricaoAplicarCps" class="info-suave">Os ajustes estao bloqueados por padrao. Instale a trava da API para configurar.</p>
+   <p class="info-suave">Desativado: o botao Aplicar no CPS desaparece da Conferencia e a API bloqueia a gravacao. Rejeitar e solicitar recontagem continuam disponiveis.</p>
+  </div>
+ </div>
+ <div class="config-bloco"><div class="config-titulo"><div><h2>Regras gerais</h2><p>Filtros globais de elegibilidade de materiais.</p></div></div><div id="formConfig"></div></div>
+</div></section>
 
 <section id="contados" class="painel" data-gestor hidden>
  <div class="subtop"><div><h2>Materiais contados</h2><p class="info-suave">Historico de contagens por material, inclusive rejeitadas e recontagens.</p></div>
