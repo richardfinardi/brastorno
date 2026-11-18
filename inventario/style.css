@@ -323,3 +323,19 @@ th{background:#f0f3f8;color:#596a82;font-weight:900}
 .aplicar-cps-card button:disabled{background:#e5e9ef;color:#7f8fa3;border-color:#d7dfe8}
 .aplicar-cps-card .info-suave{font-size:11px;line-height:1.5;margin:12px 0 0}
 @media(max-width:650px){.aplicar-cps-linha{align-items:stretch}.aplicar-cps-linha button{width:100%}}
+
+
+/* V3.5 - Link publico de contagem por funcionario */
+.acesso-publico-info{padding:15px 17px;background:#f8fbf6;border:1px solid #d9e7cd;border-radius:12px;max-width:1050px}
+.acesso-publico-info .config-flex{align-items:flex-end}
+.acesso-publico-info .config-flex .campo{flex:0 1 215px}
+.acesso-publico-info .config-flex button{min-height:40px}
+.link-publico-flex{display:flex;align-items:center;gap:8px;margin:6px 0 10px}
+.link-publico-flex input{flex:1;min-width:0;width:100%;padding:10px 12px;border:1px solid #a3bb81;border-radius:9px;background:#fff}
+.link-publico-flex button{white-space:nowrap;min-height:42px}
+.lista-links-contagem{margin-top:12px;overflow-x:auto}
+.lista-links-contagem .tabela{max-height:290px}
+.lista-links-contagem table{min-width:600px}
+.lista-links-contagem .link-ativo{background:#e4f2d9;color:#467322;font-weight:800;font-size:11px;border-radius:8px;padding:4px 7px}
+.lista-links-contagem .botao-perigo{background:#fff3f3;border-color:#ebc5cd;color:#a32c41}
+@media(max-width:650px){.acesso-publico-info{padding:12px}.link-publico-flex{flex-wrap:wrap}.link-publico-flex button{width:100%}}
