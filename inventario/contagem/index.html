@@ -49,10 +49,19 @@ button:disabled{opacity:.45;cursor:not-allowed}.primario{background:var(--green)
 .lote-linha input{min-width:0}
 [hidden]{display:none!important}
 @media(max-width:710px){.header-content{padding:10px 11px;gap:8px}.header-content .logo{width:125px;height:53px}.header-content .parceiro{display:none}.header-divider{height:30px}.header-title strong{font-size:12px}.header-title small{font-size:9px}main{padding:15px 11px 96px}h1{font-size:22px}.painel{padding:14px}.materiais{grid-template-columns:minmax(0,1fr)}.material .acoes button{min-width:120px}.fixa{padding:9px}.fixa .interno b{font-size:11px}.fixa button{font-size:12px;padding:11px}.modal-dialog{padding:14px}}
+
+/* V3.6 - tela publica compacta e pesquisa por local */
+#nomeContador.nome-compacto{font-size:12px;margin:5px 0 14px;padding:8px 12px;min-height:0;gap:12px}
+.nome-compacto span{overflow-wrap:anywhere;min-width:0}
+.nome-compacto button{min-height:30px;padding:5px 9px;font-size:11px;border-radius:7px}
+.toolbar .campo-local{flex:0 1 260px;min-width:190px}
+.toolbar .campo-local select{max-width:100%;text-overflow:ellipsis}
+.toolbar input,.toolbar select{min-height:45px}
+@media(max-width:710px){main{padding-top:10px}.nome-compacto{margin-top:0!important}.toolbar{display:grid;grid-template-columns:minmax(0,1fr);gap:9px}.toolbar .campo,.toolbar .campo-local{min-width:0;max-width:100%;width:100%}.toolbar #btnAtualizar{width:100%}}
 </style></head><body>
 <header><div class="header-content">
 <img class="logo" src="../../controle_fabrica/brastorno_logo.png" alt="Brastorno">
-<span class="header-divider"></span><div class="header-title"><strong>CONTAGEM DE INVENTARIO</strong><small>Deposito 1 | Contagem as cegas</small></div>
+<span class="header-divider"></span><div class="header-title"><strong>CONTAGEM DE INVENTARIO</strong><small>Inventario de materiais</small></div>
 <span class="header-divider"></span><img class="parceiro" src="../../LOGO.PNG" alt="Consultoria RF"></div></header>
 <main>
 <section id="telaEntrada" class="identidade painel">
@@ -65,11 +74,11 @@ button:disabled{opacity:.45;cursor:not-allowed}.primario{background:var(--green)
  <p class="sub" style="margin-top:14px">Seu nome ficara registrado junto das contagens enviadas.</p>
 </section>
 <section id="telaContagem" hidden>
- <h1>Meus materiais para contagem</h1>
- <div id="nomeContador" class="nome-selecionado"></div>
- <p class="sub">Informe apenas a quantidade fisicamente encontrada. Saldos e custos do CPS nao sao exibidos.</p>
+ <div id="nomeContador" class="nome-selecionado nome-compacto"></div>
  <div class="toolbar">
-  <div class="campo"><label for="buscaMaterial">Pesquisar codigo, material ou local</label><input id="buscaMaterial" placeholder="Buscar materiais..." autocomplete="off"></div>
+  <div class="campo"><label for="buscaMaterial">Pesquisar codigo ou material</label><input id="buscaMaterial" placeholder="Buscar materiais..." autocomplete="off"></div>
+  <div class="campo campo-local"><label for="filtroLocalPublico">Local de estoque</label>
+   <select id="filtroLocalPublico" aria-label="Filtrar por local de estoque"><option value="">Todos os locais</option></select></div>
   <button type="button" id="btnAtualizar">Atualizar</button>
  </div>
  <div id="mensagem" class="aviso"></div>
@@ -80,5 +89,5 @@ button:disabled{opacity:.45;cursor:not-allowed}.primario{background:var(--green)
 </main>
 <div class="fixa" id="rodape" hidden><div class="interno"><b id="resumoRascunho">0 materiais contados</b><button id="btnEnviar" class="primario" disabled>Enviar para conferencia</button></div></div>
 <div id="modal" hidden></div>
-<script src="./app.js?v=35"></script>
+<script src="./app.js?v=36"></script>
 </body></html>
