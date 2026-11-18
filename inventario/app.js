@@ -492,7 +492,7 @@ async function carregarDestinosRecontagem(){
  try{
   var [g,u]=await Promise.all([
    api("/brastorno/inventario/grupos?cod_empresa="+empresa),
-   api("/brastorno/inventario/usuarios")
+   api("/brastorno/inventario/funcionarios")
   ]);
   if(eAgora!==empresa)return;
   equipes=g.grupos||[];usuariosInventario=u.usuarios||[];
@@ -599,7 +599,7 @@ async function carregarEquipes(){
  try{
   var res=await Promise.all([
     api("/brastorno/inventario/grupos?cod_empresa="+empresa),
-    api("/brastorno/inventario/usuarios"),
+    api("/brastorno/inventario/funcionarios"),
     api("/brastorno/inventario/tolerancias?cod_empresa="+empresa)
   ]);
   equipes=res[0].grupos||[];usuariosInventario=res[1].usuarios||[];
@@ -781,7 +781,7 @@ function paramAba(id){
  });
  if(id==="distribuir")carregarDisponiveis();
  else if(id==="distribuidos")carregarAtribuicoes();
- else if(id==="regras")carregarPermissaoCps();
+ else if(id==="regras"){carregarPermissaoCps();listarLinksContagem()}
 }
 function previewParams(){
  var q="/brastorno/inventario/disponiveis?cod_empresa="+empresa+
@@ -914,6 +914,70 @@ async function atualizarProgresso(){
  }catch(e){$("progressoInfo").textContent="Indicadores indisponiveis: "+erroMsg(e)+
    ". Instale o modulo V3.1 na API."}
 }
+
+/* Contagem V3.5: links publicos controlados por gestor */
+var linkPublicoAtual="";
+async function listarLinksContagem(){
+ if(!isGestor())return;
+ var emp=empresa,el=$("listaLinksContagem");if(!el)return;
+ el.textContent="Carregando links autorizados...";
+ try{
+  var d=await api("/brastorno/inventario/links-contagem?cod_empresa="+empresa);
+  if(emp!==empresa)return;
+  var lista=d.links||[];
+  if(!lista.length){el.textContent="Nenhum link criado nesta empresa.";return}
+  var out="<div class='tabela'><table><thead><tr><th>Criado em</th><th>Validade</th><th>Responsavel</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
+  lista.forEach(function(r){
+   out+="<tr><td>"+esc(r.criado_em)+"</td><td>"+esc(r.expira_em)+"</td>"+
+    "<td>"+esc(r.criado_por)+"</td><td>"+(r.ativo?"<span class='link-ativo'>Ativo</span>":"Encerrado")+"</td>"+
+    "<td>"+(r.ativo?"<button class='mini botao-perigo' type='button' onclick='BRRevogarLinkContagem(\""+esc(r.id)+"\")'>Revogar link</button>":"")+"</td></tr>";
+  });
+  el.innerHTML=out+"</tbody></table></div>";
+ }catch(e){if(emp===empresa)el.textContent="Links indisponiveis: "+erroMsg(e)+". Instale a API V3.5."}
+}
+async function gerarLinkContagem(){
+ if(!isGestor()){aviso("Acesso exclusivo do gestor.",true);return}
+ var btn=$("btnGerarLinkContagem"),emp=empresa;
+ btn.disabled=true;
+ try{
+  var res=await api("/brastorno/inventario/links-contagem","POST",
+    {cod_empresa:empresa,dias:Number($("diasLinkContagem").value||7)});
+  if(emp!==empresa)return;
+  linkPublicoAtual="https://consultoriarf.net/brastorno/inventario/contagem/?acesso="+encodeURIComponent(res.token);
+  $("linkGeradoContagem").hidden=false;
+  $("campoLinkContagem").value=linkPublicoAtual;
+  aviso("Link autorizado gerado ate "+res.expira_em+". Copie para enviar aos funcionarios.");
+  await listarLinksContagem();
+ }catch(e){aviso("Nao foi possivel gerar o link: "+erroMsg(e),true)}
+ finally{btn.disabled=false}
+}
+async function copiarLinkContagem(){
+ var link=$("campoLinkContagem").value;
+ if(!link){aviso("Gere um link antes de copiar.",true);return}
+ try{
+  if(navigator.clipboard&&window.isSecureContext){
+    await navigator.clipboard.writeText(link);
+    aviso("Link copiado. Encaminhe somente aos funcionarios autorizados.");
+  }else{
+    $("campoLinkContagem").focus();$("campoLinkContagem").select();
+    document.execCommand("copy");aviso("Link selecionado e copiado.");
+  }
+ }catch(e){aviso("Selecione o link e copie manualmente.",true)}
+}
+async function revogarLinkContagem(id){
+ if(!confirm("Revogar este link? Todos os contadores que usarem ele perderao acesso, inclusive sessoes abertas."))return;
+ try{
+  await api("/brastorno/inventario/links-contagem/"+encodeURIComponent(id)+
+       "/revogar?cod_empresa="+empresa,"POST",{});
+  aviso("Link revogado.");
+  await listarLinksContagem();
+ }catch(e){aviso(erroMsg(e),true)}
+}
+window.BRGerarLinkContagem=gerarLinkContagem;
+window.BRCopiarLinkContagem=copiarLinkContagem;
+window.BRListarLinksContagem=listarLinksContagem;
+window.BRRevogarLinkContagem=revogarLinkContagem;
+
 window.BRParamAba=paramAba;
 window.BRPreviewRecarregar=function(){previewPagina=1;carregarDisponiveis()};
 window.BRPreviewMarcarTodos=marcarPaginaPreview;
@@ -1066,7 +1130,7 @@ async function carregarDestinosContados(){
   var emp=empresa;
   var [g,u]=await Promise.all([
    api("/brastorno/inventario/grupos?cod_empresa="+empresa),
-   api("/brastorno/inventario/usuarios")
+   api("/brastorno/inventario/funcionarios")
   ]);
   if(emp!==empresa)return;
   optionList($("pessoaContados"),(u.usuarios||[]).map(function(x){return {id:x,nome:x}}),"","Selecione...");
