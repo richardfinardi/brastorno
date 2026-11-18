@@ -18,9 +18,9 @@
  <button class="param-tab" type="button" data-param-aba="regras" onclick="BRParamAba('regras')">5. Regras</button>
 </nav><div id="param_distribuir" class="param-tela"><div class="config-bloco">
  <div class="config-titulo"><div><h2>Distribuicao de materiais</h2><p>Direcione materiais para uma pessoa ou para a fila compartilhada de um grupo.</p></div></div>
- <div class="config-flex"><div class="campo"><label>ATRIBUIR PARA</label><select id="destinoTipo" onchange="BRDestinoTipo()"><option value="grupo">Grupo de contagem</option><option value="usuario">Pessoa especifica</option></select></div>
+ <div class="config-flex"><div class="campo"><label>ATRIBUIR PARA</label><select id="destinoTipo" onchange="BRDestinoTipo()"><option value="grupo">Grupo de contagem</option><option value="usuario">Funcionario especifico</option></select></div>
   <div class="campo campo-longo" id="destinoGrupoWrap"><label>GRUPO</label><select id="destinoGrupo"><option value="">Selecione...</option></select></div>
-  <div class="campo campo-longo" id="destinoPessoaWrap" hidden><label>USUARIO</label><select id="destinoPessoa"><option value="">Selecione...</option></select></div></div>
+  <div class="campo campo-longo" id="destinoPessoaWrap" hidden><label>FUNCIONARIO</label><select id="destinoPessoa"><option value="">Selecione...</option></select></div></div>
  <details class="filtros-suspensos"><summary>Distribuir digitando codigos (opcional)</summary><div class="config-flex"><div class="campo campo-longo"><label>CODIGOS DOS PRODUTOS (OPCIONAL)</label><textarea id="codigosDistribuicao" rows="2" placeholder="Ex.: 71, 1164, 23417"></textarea></div></div></details><div class="config-flex">
  <div class="campo campo-longo"><label>BUSCAR MATERIAL DISPONIVEL</label><input id="buscaDistribuicao" placeholder="Pesquisar materiais disponiveis..." autocomplete="off"></div></div>
  <details id="filtrosDistribuicao" class="filtros-suspensos"><summary>Filtros por origem, familia, grupo, subgrupos e local de estoque</summary><div class="campos-filtros"><div class="campo"><label>Origem do material</label><select id="distMetodoReposicao" onchange="BRDistFiltrar('metodo_reposicao')"><option value="">Todos</option><option value="0">Compras</option><option value="1">Producao propria</option><option value="2">Producao terceiros</option></select></div><div class="campo"><label>Familia</label><select id="dist_familia" onchange="BRDistFiltrar('familia')"><option value="">Todos</option></select></div>
@@ -54,7 +54,7 @@
 </div><div id="param_distribuidos" class="param-tela" hidden><div class="config-bloco"><div class="config-titulo"><h3>Materiais distribuidos</h3></div>
  <div class="config-flex">
   <div class="campo"><label>GRUPO DE CONTAGEM</label><select id="filtroGrupoAtribuido" onchange="BRFiltroAtribuicoes()"><option value="">Todos os grupos</option></select></div>
-  <div class="campo"><label>USUARIO RESPONSAVEL</label><select id="filtroUsuarioAtribuido" onchange="BRFiltroAtribuicoes()"><option value="">Todos os usuarios</option></select></div>
+  <div class="campo"><label>FUNCIONARIO RESPONSAVEL</label><select id="filtroUsuarioAtribuido" onchange="BRFiltroAtribuicoes()"><option value="">Todos os usuarios</option></select></div>
   <div class="campo"><label>STATUS</label><select id="statusAtribuicao" onchange="BRFiltroAtribuicoes()"><option value="TODOS">Todos</option><option value="ATRIBUIDO">Aguardando contagem</option><option value="EM_CONFERENCIA">Em conferencia</option><option value="CONCLUIDO">Concluidos</option></select></div>
  </div>
  <div class="acoes-remocao" id="barraRemocao">
@@ -66,9 +66,9 @@
  <div id="listaAtribuicoes" class="info-suave">Carregando distribuicoes...</div>
 </div>
 </div><div id="param_equipes" class="param-tela" hidden><div class="config-bloco">
- <div class="config-titulo"><div><h2>Grupos de contagem</h2><p>Cadastre equipes e associe usuarios habilitados no CPS.</p></div></div>
+ <div class="config-titulo"><div><h2>Grupos de contagem</h2><p>Selecione os funcionarios por nome a partir do cadastro de funcionarios do CPS.</p></div></div>
  <div class="config-flex"><div class="campo campo-longo"><label>NOME DO NOVO GRUPO</label><input id="nomeGrupo" maxlength="90" placeholder="Ex.: Almoxarifado A"></div><button type="button" class="destaque" onclick="BRGrupoCriar()">Criar grupo</button></div>
- <div class="config-flex"><div class="campo campo-longo"><label>GRUPO PARA DEFINIR INTEGRANTES</label><select id="grupoEditar" onchange="BRGrupoEscolher()"><option value="">Selecione...</option></select></div><button type="button" onclick="BRMembrosSalvar()" class="destaque">Salvar integrantes</button></div>
+ <div class="config-flex"><div class="campo campo-longo"><label>GRUPO PARA DEFINIR FUNCIONARIOS</label><select id="grupoEditar" onchange="BRGrupoEscolher()"><option value="">Selecione...</option></select></div><button type="button" onclick="BRMembrosSalvar()" class="destaque">Salvar integrantes</button></div>
  <div id="usuariosGrupo" class="usuarios-grupo"></div>
  <div id="resumoGrupos" class="info-suave">Nenhum grupo cadastrado.</div>
 </div>
@@ -80,6 +80,23 @@
  <p class="info-suave">Exemplos: KG = 5%, MM = 10%, PC = 0%. Valores so valem apos serem salvos.</p>
  <div id="listaTolerancias">Nenhuma tolerancia configurada.</div>
 </div></div><div id="param_regras" class="param-tela" hidden>
+ <div class="config-bloco">
+  <div class="config-titulo"><div><h2>Link publico de contagem por funcionarios</h2>
+   <p>Funcionarios sem CSENHA selecionam o proprio nome na tela de contagem.</p></div></div>
+  <div class="acesso-publico-info">
+   <div class="config-flex">
+    <div class="campo"><label>VALIDADE DO LINK</label><select id="diasLinkContagem"><option value="1">1 dia</option><option value="3">3 dias</option><option value="7" selected>7 dias</option><option value="14">14 dias</option></select></div>
+    <button type="button" class="destaque" id="btnGerarLinkContagem" onclick="BRGerarLinkContagem()">Gerar novo link</button>
+    <button type="button" onclick="BRListarLinksContagem()">Atualizar lista</button>
+   </div>
+   <div id="linkGeradoContagem" hidden><label for="campoLinkContagem">LINK GERADO (COPIE AGORA)</label>
+    <div class="link-publico-flex"><input id="campoLinkContagem" readonly aria-label="Link para funcionarios">
+      <button type="button" onclick="BRCopiarLinkContagem()">Copiar link</button></div>
+   </div>
+   <p class="info-suave">Apenas o gestor cria ou revoga links. Sem login, selecionar o nome nao comprova a identidade: compartilhe o link somente com os responsaveis.</p>
+   <div id="listaLinksContagem" class="lista-links-contagem">Carregando links autorizados...</div>
+  </div>
+ </div>
  <div class="config-bloco">
   <div class="config-titulo"><div><h2>Aplicacao de estoque no CPS</h2>
    <p>Controle exclusivo do gestor. A permissao e individual por empresa.</p></div></div>
