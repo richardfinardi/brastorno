@@ -10,7 +10,14 @@ var filtrosAtivos={};var consultaSerial=0;
 // Origem do material: 0 = Compras, 1 = Producao propria, 2 = Producao terceiros.
 var metodoReposicao=localStorage.getItem("br_inv_metodo_reposicao")||"";
 if(!["","0","1","2"].includes(metodoReposicao))metodoReposicao="";
-var equipes=[],usuariosInventario=[];
+var equipes=[],usuariosInventario=[],etiquetasFuncionarios={};
+function nomeFuncionarioVisivel(chave){return etiquetasFuncionarios[chave]||chave}
+function guardarEtiquetasFuncionarios(resultado){
+ (resultado.funcionarios||[]).forEach(function(f){
+  var detalhe=[f.setor,f.cargo].filter(Boolean).join(" / ");
+  etiquetasFuncionarios[f.chave]=f.nome+(detalhe?" | "+detalhe:"");
+ });
+}
 var paramAbaAtual="distribuir",previewPagina=1,previewSelecionados=new Set(),previewMateriais=[];
 var contadosPagina=1,contadosAtuais=[],contadosSelecionados=new Map(),serieContados=0;
 var kpiIndicador="",kpiPagina=1,serieKPI=0;
@@ -496,7 +503,8 @@ async function carregarDestinosRecontagem(){
   ]);
   if(eAgora!==empresa)return;
   equipes=g.grupos||[];usuariosInventario=u.usuarios||[];
-  optionList($("pessoaRecontagem"),usuariosInventario.map(function(x){return {id:x,nome:x}}),"","Selecione um usuario...");
+  guardarEtiquetasFuncionarios(u);
+  optionList($("pessoaRecontagem"),usuariosInventario.map(function(x){return {id:x,nome:nomeFuncionarioVisivel(x)}}),"","Selecione um usuario...");
   var destinoAnterior=$("grupoRecontagem").value;
   $("grupoRecontagem").innerHTML="<option value=''>Selecione um grupo...</option>";
   equipes.forEach(function(g){
@@ -603,12 +611,13 @@ async function carregarEquipes(){
     api("/brastorno/inventario/tolerancias?cod_empresa="+empresa)
   ]);
   equipes=res[0].grupos||[];usuariosInventario=res[1].usuarios||[];
+  guardarEtiquetasFuncionarios(res[1]);
   optionList($("grupoEditar"),equipes,"","Selecione um grupo...");
   optionList($("destinoGrupo"),equipes,"","Selecione um grupo...");
-  optionList($("destinoPessoa"),usuariosInventario.map(function(x){return {id:x,nome:x}}),"","Selecione um usuario...");
+  optionList($("destinoPessoa"),usuariosInventario.map(function(x){return {id:x,nome:nomeFuncionarioVisivel(x)}}),"","Selecione um usuario...");
   var grupoAtual=$("filtroGrupoAtribuido").value,usuarioAtual=$("filtroUsuarioAtribuido").value;
   optionList($("filtroGrupoAtribuido"),equipes,grupoAtual,"Todos os grupos");
-  optionList($("filtroUsuarioAtribuido"),usuariosInventario.map(function(x){return {id:x,nome:x}}),usuarioAtual,"Todos os usuarios");
+  optionList($("filtroUsuarioAtribuido"),usuariosInventario.map(function(x){return {id:x,nome:nomeFuncionarioVisivel(x)}}),usuarioAtual,"Todos os usuarios");
   $("usuariosGrupo").innerHTML="";
   $("resumoGrupos").textContent=equipes.length+" grupo(s) configurado(s).";
   $("listaTolerancias").innerHTML=(res[2].tolerancias||[]).map(function(x){
@@ -622,7 +631,7 @@ function grupoEscolher(){
  $("usuariosGrupo").innerHTML=usuariosInventario.map(function(u){
   var marcado=g&&g.integrantes&&g.integrantes.includes(u);
   return "<label class='usuario-check'><input type='checkbox' data-grupo-usuario value='"+esc(u)+"' "+
-   (marcado?"checked":"")+"> "+esc(u)+"</label>";
+   (marcado?"checked":"")+"> "+esc(nomeFuncionarioVisivel(u))+"</label>";
  }).join("");
 }
 async function grupoCriar(){
@@ -1133,7 +1142,8 @@ async function carregarDestinosContados(){
    api("/brastorno/inventario/funcionarios")
   ]);
   if(emp!==empresa)return;
-  optionList($("pessoaContados"),(u.usuarios||[]).map(function(x){return {id:x,nome:x}}),"","Selecione...");
+  guardarEtiquetasFuncionarios(u);
+  optionList($("pessoaContados"),(u.usuarios||[]).map(function(x){return {id:x,nome:nomeFuncionarioVisivel(x)}}),"","Selecione...");
   var grupos=(g.grupos||[]).filter(function(x){return (x.integrantes||[]).length>0});
   optionList($("grupoContados"),grupos,"","Selecione grupo com integrantes...");
  }catch(err){aviso("Destinos de recontagem: "+erroMsg(err),true)}
