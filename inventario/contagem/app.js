@@ -64,10 +64,11 @@ async function entrar(){
   var d=await api("/brastorno/inventario/publico/iniciar","POST",{convite:convite,funcionario:chave});
   sessao=d.sessao;empresa=d.cod_empresa;nome=d.nome;pagina=1;rascunhos={};
   $("telaEntrada").hidden=true;$("telaContagem").hidden=false;$("rodape").hidden=false;
-  $("nomeContador").innerHTML="<span>"+esc(nome)+" | Empresa "+empresa+"</span>"+
-    "<button type='button' id='btnTrocarNome'>Trocar nome</button>";
+  $("nomeContador").innerHTML="<span>"+esc(nome)+"</span>"+
+    "<button type='button' id='btnTrocarNome'>Trocar</button>";
   $("btnTrocarNome").onclick=trocar;
   atualizarRascunho();
+  await carregarLocais();
   await carregar();
  }catch(e){entradaErro(erroMsg(e))}
  finally{$("btnIniciar").disabled=false}
@@ -83,8 +84,9 @@ async function carregar(){
  $("paginacao").innerHTML="";
  try{
   var busca=$("buscaMaterial").value.trim();
+  var local=$("filtroLocalPublico").value;
   var d=await api("/brastorno/inventario/publico/itens?sessao="+encodeURIComponent(sessao)+
-   "&pagina="+pagina+"&limite="+limite+"&busca="+encodeURIComponent(busca));
+   "&pagina="+pagina+"&limite="+limite+"&busca="+encodeURIComponent(busca)+"&local="+encodeURIComponent(local));
   produtos=d.produtos||[];total=d.total||0;
   $("resumoMateriais").textContent=fmt(total)+" material(is) atribuido(s) | Pagina "+pagina+
     (d.bloqueados_por_colegas_na_pagina?" | "+d.bloqueados_por_colegas_na_pagina+" em contagem por colega":"");
@@ -125,7 +127,7 @@ async function contar(cod){
  }catch(e){aviso("Nao foi possivel iniciar a contagem deste material: "+erroMsg(e),true);return}
  var lote=[1,2,3].includes(Number(p.tipo_controle)),draft=rascunhos[cod];
  var html="<div class='modal-dialog'><h2>"+esc(p.codigo_interno||cod)+"</h2><p class='sub'>"+esc(p.produto)+"</p>"+
-  "<p class='sub'>Informe a quantidade fisica. Nao consulte o saldo do CPS.</p>";
+  "";
  if(lote){
   html+="<label>Lotes / series</label><div id='listaLotes'>";
   var ls=draft&&draft.lotes?draft.lotes:(p.lotes||[]);
@@ -197,12 +199,28 @@ function trocar(){
  });
  sessao="";rascunhos={};produtos=[];nome="";
  $("telaContagem").hidden=true;$("telaEntrada").hidden=false;$("rodape").hidden=true;
- $("buscarNome").value="";$("selecionarNome").value="";popularNomes();
+ $("buscarNome").value="";$("selecionarNome").value="";$("filtroLocalPublico").innerHTML="<option value=''>Todos os locais</option>";popularNomes();
 }
+async function carregarLocais(){
+ var select=$("filtroLocalPublico"),antes=select.value;
+ select.innerHTML="<option value=''>Todos os locais</option>";
+ if(!sessao)return;
+ try{
+  var r=await api("/brastorno/inventario/publico/locais?sessao="+encodeURIComponent(sessao));
+  (r.locais||[]).forEach(function(valor){
+   var op=document.createElement("option");
+   op.value=valor;op.textContent=valor==="__SEM_LOCAL__"?"Sem local de estoque":valor;
+   select.add(op);
+  });
+  if(Array.from(select.options).some(function(x){return x.value===antes}))select.value=antes;
+ }catch(e){aviso("Nao foi possivel carregar a lista de locais: "+erroMsg(e),true)}
+}
+
 window.BRPubContar=contar;
 window.BRPubPagina=function(delta){pagina=Math.max(1,pagina+delta);carregar();window.scrollTo({top:0,behavior:"smooth"})};
 $("btnIniciar").onclick=entrar;$("btnEnviar").onclick=enviar;
-$("btnAtualizar").onclick=carregar;
+$("btnAtualizar").onclick=function(){carregarLocais();carregar()};
+$("filtroLocalPublico").onchange=function(){pagina=1;carregar()};
 $("selecionarNome").onchange=function(){$("btnIniciar").disabled=!this.value};
 $("buscarNome").oninput=popularNomes;
 $("buscaMaterial").oninput=function(){clearTimeout(debounce);debounce=setTimeout(function(){pagina=1;carregar()},350)};
