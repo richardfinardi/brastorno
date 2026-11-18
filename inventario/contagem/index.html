@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow">
+<title>Contagem | Inventario Brastorno</title>
+<link rel="icon" href="../../controle_fabrica/favicon.png">
+<style>
+:root{--blue:#142446;--green:#708e34;--bg:#f3f6fa;--line:#dce4ed;--muted:#71819a;--ink:#20314b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:14px/1.5 Arial,system-ui,sans-serif;color:var(--ink)}
+header{background:var(--blue);color:white;border-bottom:5px solid var(--green)}
+.header-content{max-width:1250px;display:flex;align-items:center;gap:14px;margin:auto;padding:14px 20px}
+.header-content .logo{object-fit:contain;width:155px;height:60px}.header-divider{height:38px;width:1px;background:#72819d}
+.header-title strong{display:block;font-size:15px;font-weight:900}.header-title small{font-size:11px;color:#c5d2e4}
+.header-content .parceiro{width:170px;height:55px;object-fit:contain}
+main{max-width:1050px;margin:auto;padding:24px 18px 95px}
+h1{font-size:25px;margin:0;color:var(--blue)}h2{font-size:19px;margin:0;color:var(--blue)}
+p.sub{margin:4px 0 19px;color:var(--muted);font-size:12px}
+label{display:block;font-size:11px;font-weight:850;color:#64768c;text-transform:uppercase;letter-spacing:.035em;margin:0 0 5px}
+input,select{font:inherit;border:1px solid #cedae7;border-radius:10px;padding:12px;color:var(--ink);width:100%;background:#fff;min-height:45px}
+input:focus,select:focus{outline:2px solid #b8ce99;border-color:var(--green)}
+button{font:inherit;font-weight:800;border:1px solid #d6e0eb;color:var(--blue);background:#fff;padding:10px 14px;border-radius:10px;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}.primario{background:var(--green);color:#fff;border-color:var(--green)}
+.painel{background:#fff;border:1px solid var(--line);border-radius:17px;padding:20px;box-shadow:0 5px 15px #10223f09}
+.identidade{max-width:650px;margin:20px auto}.identidade .campo{margin:14px 0}
+.nome-selecionado{background:#edf4e6;border-radius:10px;padding:10px 12px;font-weight:bold;color:#466823;display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:15px 0}
+.aviso{font-size:12px;color:#3d7124;font-weight:750;margin:8px 0 15px;min-height:17px}
+.aviso.erro{color:#a33043;background:#fff0f2;border:1px solid #ebc4cc;border-radius:10px;padding:12px}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}.toolbar .campo{flex:1 1 300px}
+.toolbar button{align-self:end;min-height:45px}
+.resumo{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0;color:#667891;font-size:12px}
+.materiais{display:grid;grid-template-columns:repeat(auto-fit,minmax(275px,1fr));gap:12px}
+.material{background:#fff;border:1px solid #dfe6f0;border-radius:13px;padding:14px;box-shadow:0 2px 7px #1327460b;min-width:0}
+.material h3{font-size:14px;color:var(--blue);margin:5px 0 9px;line-height:1.35;overflow-wrap:anywhere}
+.material .codigo{font-size:13px;font-weight:900;color:var(--green)}
+.material .meta{color:#7d8da2;font-size:11px;margin:8px 0}
+.material .meta strong{color:var(--blue)}
+.material .estado{font-size:11px;font-weight:850;color:#51732e}
+.material .acoes{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
+.material .acoes button{min-width:120px}
+.empty{background:white;border:1px dashed #bccbdd;border-radius:12px;text-align:center;padding:25px;color:#6e8096}
+.paginas{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:15px 0}
+.fixa{position:fixed;bottom:0;left:0;right:0;background:white;border-top:2px solid #dce7ce;box-shadow:0 -6px 19px #1b2e4a20;z-index:8;padding:12px 18px}
+.fixa .interno{max-width:1050px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fixa b{font-size:12px}.fixa button{min-height:45px}
+#modal:not([hidden]){display:flex;align-items:center;justify-content:center;position:fixed;inset:0;background:#0d192cbf;z-index:20;padding:14px}
+.modal-dialog{background:white;border-radius:16px;padding:21px;max-width:570px;width:100%;max-height:90vh;overflow:auto}
+.modal-dialog .sub{margin-bottom:16px}.modal-dialog input{margin:5px 0 12px}.modal-dialog .buttons{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.lote-linha{display:grid;grid-template-columns:minmax(0,1fr) minmax(95px,115px);gap:8px;align-items:center}
+.lote-linha input{min-width:0}
+[hidden]{display:none!important}
+@media(max-width:710px){.header-content{padding:10px 11px;gap:8px}.header-content .logo{width:125px;height:53px}.header-content .parceiro{display:none}.header-divider{height:30px}.header-title strong{font-size:12px}.header-title small{font-size:9px}main{padding:15px 11px 96px}h1{font-size:22px}.painel{padding:14px}.materiais{grid-template-columns:minmax(0,1fr)}.material .acoes button{min-width:120px}.fixa{padding:9px}.fixa .interno b{font-size:11px}.fixa button{font-size:12px;padding:11px}.modal-dialog{padding:14px}}
+</style></head><body>
+<header><div class="header-content">
+<img class="logo" src="../../controle_fabrica/brastorno_logo.png" alt="Brastorno">
+<span class="header-divider"></span><div class="header-title"><strong>CONTAGEM DE INVENTARIO</strong><small>Deposito 1 | Contagem as cegas</small></div>
+<span class="header-divider"></span><img class="parceiro" src="../../LOGO.PNG" alt="Consultoria RF"></div></header>
+<main>
+<section id="telaEntrada" class="identidade painel">
+ <h1>Identifique-se pelo nome</h1>
+ <p class="sub">Selecione seu nome para visualizar os materiais direcionados a voce ou a sua equipe. Nao e necessario login.</p>
+ <div id="empresaConvite" class="nome-selecionado" hidden></div>
+ <div class="campo"><label for="buscarNome">Pesquisar funcionario</label><input id="buscarNome" placeholder="Digite seu nome..." autocomplete="off"></div>
+ <div class="campo"><label for="selecionarNome">Nome do funcionario</label><select id="selecionarNome"><option value="">Escolha seu nome...</option></select></div>
+ <button class="primario" id="btnIniciar" type="button" disabled>Entrar na contagem</button>
+ <p class="sub" style="margin-top:14px">Seu nome ficara registrado junto das contagens enviadas.</p>
+</section>
+<section id="telaContagem" hidden>
+ <h1>Meus materiais para contagem</h1>
+ <div id="nomeContador" class="nome-selecionado"></div>
+ <p class="sub">Informe apenas a quantidade fisicamente encontrada. Saldos e custos do CPS nao sao exibidos.</p>
+ <div class="toolbar">
+  <div class="campo"><label for="buscaMaterial">Pesquisar codigo, material ou local</label><input id="buscaMaterial" placeholder="Buscar materiais..." autocomplete="off"></div>
+  <button type="button" id="btnAtualizar">Atualizar</button>
+ </div>
+ <div id="mensagem" class="aviso"></div>
+ <div id="resumoMateriais" class="resumo"></div>
+ <div id="listaMateriais" class="materiais"></div>
+ <div class="paginas" id="paginacao"></div>
+</section>
+</main>
+<div class="fixa" id="rodape" hidden><div class="interno"><b id="resumoRascunho">0 materiais contados</b><button id="btnEnviar" class="primario" disabled>Enviar para conferencia</button></div></div>
+<div id="modal" hidden></div>
+<script src="./app.js?v=35"></script>
+</body></html>
