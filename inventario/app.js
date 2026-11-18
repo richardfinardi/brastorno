@@ -52,58 +52,69 @@ async function api(caminho,metodo,body){
  return val;
 }
 function isGestor(){return perfil&&perfil.inventario_gestor}
-var aplicarCpsHabilitado=false, aplicarCpsDisponivel=false, aplicacaoCpsErro="";
+var aplicarCpsHabilitado=false,aplicarCpsConfigurado=false,aplicarCpsDisponivel=false,aplicacaoCpsErro="";
 var consultaPermissaoCps=0;
+function receberSituacaoCps(resposta){
+ aplicarCpsConfigurado=(resposta.habilitado===true);
+ aplicarCpsDisponivel=(typeof resposta.liberacao_efetiva==="boolean");
+ aplicarCpsHabilitado=aplicarCpsDisponivel&&(resposta.liberacao_efetiva===true);
+ aplicacaoCpsErro=!aplicarCpsDisponivel?
+   "A API ainda nao tem a sincronizacao V3.6. Instale a atualizacao no servidor; nenhuma gravacao sera liberada.":
+   aplicarCpsConfigurado&&!aplicarCpsHabilitado?
+   "Liberado na aplicacao, mas BLOQUEADO no servidor V2.2. Clique em Sincronizar servidor.":
+   (resposta.observacao_servidor||"");
+ atualizarVisaoAplicarCps();
+}
 function atualizarVisaoAplicarCps(){
  var status=$("statusAplicarCps"),btn=$("btnAlterarAplicarCps"),descricao=$("descricaoAplicarCps");
  if(!status||!btn||!descricao)return;
  status.className="aplicar-cps-status "+(aplicarCpsHabilitado?"ativo":"inativo");
- status.textContent=aplicarCpsHabilitado?"ATIVADO":"DESATIVADO";
- btn.textContent=aplicarCpsHabilitado?"Desativar aplicacao no CPS":"Ativar aplicacao no CPS";
+ status.textContent=aplicarCpsHabilitado?"ATIVADO NO SERVIDOR":
+   (aplicarCpsConfigurado?"BLOQUEADO NO SERVIDOR":"DESATIVADO");
+ btn.textContent=aplicarCpsHabilitado?"Desativar aplicacao no CPS":
+   (aplicarCpsConfigurado?"Sincronizar servidor":"Ativar aplicacao no CPS");
  btn.className=aplicarCpsHabilitado?"botao-desativar-cps":"botao-ativar-cps";
  btn.disabled=!aplicarCpsDisponivel;
  descricao.textContent=aplicacaoCpsErro?aplicacaoCpsErro:
-  (aplicarCpsHabilitado?"A Conferencia pode solicitar ajustes desta empresa, respeitando tambem as travas de seguranca V2.2.":
-  "Os ajustes desta empresa estao BLOQUEADOS. Rejeitar e Recontar continuam disponiveis.");
+  (aplicarCpsHabilitado?"Conferencia pode solicitar ajustes reais no CPS para esta empresa; todas as travas de seguranca V2.2 continuam ativas.":
+  "Os ajustes de estoque estao BLOQUEADOS. Rejeitar e Recontar continuam disponiveis.");
 }
 async function carregarPermissaoCps(){
  var eAtual=empresa,req=++consultaPermissaoCps,antes=aplicarCpsHabilitado;
- aplicarCpsHabilitado=false;aplicarCpsDisponivel=false;
- aplicacaoCpsErro="Consultando permissao na API...";atualizarVisaoAplicarCps();
+ aplicarCpsHabilitado=false;aplicarCpsConfigurado=false;aplicarCpsDisponivel=false;
+ aplicacaoCpsErro="Consultando permissao no servidor...";atualizarVisaoAplicarCps();
  try{
   var r=await api("/brastorno/inventario/aplicacao-cps?cod_empresa="+eAtual);
   if(eAtual!==empresa||req!==consultaPermissaoCps)return;
-  aplicarCpsHabilitado=(r.habilitado===true);
-  aplicarCpsDisponivel=true;aplicacaoCpsErro="";
+  receberSituacaoCps(r);
  }catch(e){
   if(eAtual!==empresa||req!==consultaPermissaoCps)return;
   aplicarCpsHabilitado=false;aplicarCpsDisponivel=false;
-  aplicacaoCpsErro="Protecao da API indisponivel. Aplicar no CPS permanece BLOQUEADO. Instale a versao V3.4 na API. "+erroMsg(e);
+  aplicacaoCpsErro="API indisponivel; aplicar no CPS segue bloqueado. "+erroMsg(e);
+  atualizarVisaoAplicarCps();
  }
- atualizarVisaoAplicarCps();
  if(aba==="conferencia"&&(antes!==aplicarCpsHabilitado||aplicarCpsHabilitado))carregarConferencia();
 }
 async function alternarAplicarCps(){
  if(!isGestor()||!aplicarCpsDisponivel){
-  aviso("A configuracao do CPS ainda nao esta disponivel no servidor.",true);return;
+  aviso("O servidor ainda precisa ser atualizado para a V3.6.",true);return;
  }
- var habilitar=!aplicarCpsHabilitado;
- var confirmar="";
+ var habilitar=!aplicarCpsHabilitado,confirmar="";
  if(habilitar){
-  confirmar=prompt("Esta operacao liberara AJUSTES REAIS de estoque no CPS para a empresa "+empresa+".\n\nDigite exatamente LIBERAR APLICAR NO CPS:","");
+  confirmar=prompt("LIBERAR GRAVACAO REAL NO CPS, na empresa "+empresa+"?\nDigite exatamente LIBERAR APLICAR NO CPS:","");
   if(confirmar!=="LIBERAR APLICAR NO CPS"){aviso("Ativacao cancelada. Estoque protegido.",true);return}
- }else if(!confirm("DESATIVAR aplicacao no CPS para a empresa "+empresa+"? A Conferencia continuara disponivel."))return;
+ }else if(!confirm("DESATIVAR gravacao no CPS para a empresa "+empresa+"?"))return;
  var botao=$("btnAlterarAplicarCps"),eAtual=empresa;
  botao.disabled=true;
  try{
   var r=await api("/brastorno/inventario/aplicacao-cps","POST",
     {cod_empresa:eAtual,habilitado:habilitar,confirmacao:confirmar});
   if(eAtual!==empresa)return;
-  aplicarCpsHabilitado=(r.habilitado===true);
-  aplicarCpsDisponivel=true;aplicacaoCpsErro="";
-  atualizarVisaoAplicarCps();
-  aviso(aplicarCpsHabilitado?"Aplicar no CPS ATIVADO para a empresa "+empresa+".":
-    "Aplicar no CPS DESATIVADO para a empresa "+empresa+". Nenhum estoque alterado.");
+  receberSituacaoCps(r);
+  if(habilitar&&!aplicarCpsHabilitado)throw Error("O servidor nao confirmou a liberacao de gravacao. Aplicacao segue bloqueada.");
+  aviso(aplicarCpsHabilitado?"Servidor CPS liberado para empresa "+empresa+".":
+    "Gravacao no CPS desativada para empresa "+empresa+".");
+  if(aba==="conferencia")carregarConferencia();
  }catch(e){
   aviso("Nao foi possivel alterar a permissao: "+erroMsg(e),true);
   if(eAtual===empresa)await carregarPermissaoCps();
@@ -133,7 +144,7 @@ function trocarAba(id){
 }
 function setEmpresa(v){
  empresa=Number(v)||1;pagina=1;rascunhos={};filtrosAtivos={};filtrosDist={};previewPagina=1;previewSelecionados.clear();
- aplicarCpsHabilitado=false;aplicarCpsDisponivel=false;consultaPermissaoCps++;atualizarVisaoAplicarCps();
+ aplicarCpsHabilitado=false;aplicarCpsConfigurado=false;aplicarCpsDisponivel=false;consultaPermissaoCps++;atualizarVisaoAplicarCps();
  localStorage.setItem("br_invent_empresa",empresa);
  camposFiltros.forEach(function(k){var el=$("filtro_"+k);if(el)el.value=""});
  trocarAba(aba)
