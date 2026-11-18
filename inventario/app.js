@@ -992,6 +992,18 @@ async function atualizarProgresso(){
 
 /* Contagem V3.5: links publicos controlados por gestor */
 var linkPublicoAtual="";
+function horarioBrasiliaLink(valor,expira){
+ if(!valor)return "";
+ try{
+  var instante=new Date(valor);
+  if(!Number.isFinite(instante.getTime()))return String(valor);
+  if(expira)instante=new Date(instante.getTime()-1000);
+  return new Intl.DateTimeFormat("pt-BR",{
+    timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",
+    hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"
+  }).format(instante);
+ }catch(e){return String(valor)}
+}
 async function listarLinksContagem(){
  if(!isGestor())return;
  var emp=empresa,el=$("listaLinksContagem");if(!el)return;
@@ -1001,9 +1013,9 @@ async function listarLinksContagem(){
   if(emp!==empresa)return;
   var lista=d.links||[];
   if(!lista.length){el.textContent="Nenhum link criado nesta empresa.";return}
-  var out="<div class='tabela'><table><thead><tr><th>Criado em</th><th>Validade</th><th>Responsavel</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
+  var out="<p class='info-suave'>Datas e horarios de Brasilia | Valido ate 23:59:59 da data informada.</p><div class='tabela'><table><thead><tr><th>Criado em (Brasilia)</th><th>Valido ate (Brasilia)</th><th>Responsavel</th><th>Status</th><th>Acao</th></tr></thead><tbody>";
   lista.forEach(function(r){
-   out+="<tr><td>"+esc(r.criado_em)+"</td><td>"+esc(r.expira_em)+"</td>"+
+   out+="<tr><td>"+esc(r.criado_em_br||horarioBrasiliaLink(r.criado_em,false))+"</td><td>"+esc(r.expira_em_br||horarioBrasiliaLink(r.expira_em,true))+"</td>"+
     "<td>"+esc(r.criado_por)+"</td><td>"+(r.ativo?"<span class='link-ativo'>Ativo</span>":"Encerrado")+"</td>"+
     "<td>"+(r.ativo?"<button class='mini botao-perigo' type='button' onclick='BRRevogarLinkContagem(\""+esc(r.id)+"\")'>Revogar link</button>":"")+"</td></tr>";
   });
@@ -1021,7 +1033,7 @@ async function gerarLinkContagem(){
   linkPublicoAtual="https://consultoriarf.net/brastorno/inventario/contagem/?acesso="+encodeURIComponent(res.token);
   $("linkGeradoContagem").hidden=false;
   $("campoLinkContagem").value=linkPublicoAtual;
-  aviso("Link autorizado gerado ate "+res.expira_em+". Copie para enviar aos funcionarios.");
+  aviso("Link valido ate "+(res.expira_em_br||horarioBrasiliaLink(res.expira_em,true))+" (horario de Brasilia). Copie para enviar aos funcionarios.");
   await listarLinksContagem();
  }catch(e){aviso("Nao foi possivel gerar o link: "+erroMsg(e),true)}
  finally{btn.disabled=false}
