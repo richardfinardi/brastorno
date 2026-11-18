@@ -11,6 +11,7 @@ var filtrosAtivos={};var consultaSerial=0;
 var metodoReposicao=localStorage.getItem("br_inv_metodo_reposicao")||"";
 if(!["","0","1","2"].includes(metodoReposicao))metodoReposicao="";
 var equipes=[],usuariosInventario=[],etiquetasFuncionarios={};
+var membrosEquipeMarcados=new Set();
 function nomeFuncionarioVisivel(chave){return etiquetasFuncionarios[chave]||chave}
 function guardarEtiquetasFuncionarios(resultado){
  (resultado.funcionarios||[]).forEach(function(f){
@@ -111,6 +112,7 @@ async function alternarAplicarCps(){
 window.BRAlternarAplicarCps=alternarAplicarCps;
 
 function trocarAba(id){
+ if(id==="contagem"&&isGestor())id="conferencia";
  if(id!=="contagem"&&!isGestor())return;
  aba=id;pagina=1;localStorage.setItem("br_invent_aba",id);
  document.querySelectorAll("[data-aba]").forEach(function(x){x.classList.toggle("ativa",x.getAttribute("data-aba")===id)});
@@ -612,13 +614,18 @@ async function carregarEquipes(){
   ]);
   equipes=res[0].grupos||[];usuariosInventario=res[1].usuarios||[];
   guardarEtiquetasFuncionarios(res[1]);
-  optionList($("grupoEditar"),equipes,"","Selecione um grupo...");
+  var grupoAntes=$("grupoEditar").value;
+  optionList($("grupoEditar"),equipes,grupoAntes,"Selecione um grupo...");
   optionList($("destinoGrupo"),equipes,"","Selecione um grupo...");
   optionList($("destinoPessoa"),usuariosInventario.map(function(x){return {id:x,nome:nomeFuncionarioVisivel(x)}}),"","Selecione um usuario...");
   var grupoAtual=$("filtroGrupoAtribuido").value,usuarioAtual=$("filtroUsuarioAtribuido").value;
   optionList($("filtroGrupoAtribuido"),equipes,grupoAtual,"Todos os grupos");
   optionList($("filtroUsuarioAtribuido"),usuariosInventario.map(function(x){return {id:x,nome:nomeFuncionarioVisivel(x)}}),usuarioAtual,"Todos os usuarios");
-  $("usuariosGrupo").innerHTML="";
+  // Preserva a equipe selecionada ao recarregar a relacao de funcionarios.
+  var grp=$("grupoEditar").value;
+  if(grp){grupoEscolher()}else{
+    membrosEquipeMarcados.clear();renderizarMembrosEquipe();
+  }
   $("resumoGrupos").textContent=equipes.length+" grupo(s) configurado(s).";
   $("listaTolerancias").innerHTML=(res[2].tolerancias||[]).map(function(x){
    return "<span class='chip chip-tolerancia'>"+esc(x.unidade)+" | ±"+fmt(x.percentual)+"%</span>"
@@ -627,13 +634,61 @@ async function carregarEquipes(){
  }catch(e){aviso("Configuracao de equipes: "+erroMsg(e),true)}
 }
 function grupoEscolher(){
- var g=equipes.find(function(x){return x.id===$("grupoEditar").value});
- $("usuariosGrupo").innerHTML=usuariosInventario.map(function(u){
-  var marcado=g&&g.integrantes&&g.integrantes.includes(u);
-  return "<label class='usuario-check'><input type='checkbox' data-grupo-usuario value='"+esc(u)+"' "+
-   (marcado?"checked":"")+"> "+esc(nomeFuncionarioVisivel(u))+"</label>";
- }).join("");
+ var g=equipes.find(function(x){return String(x.id)===String($("grupoEditar").value)});
+ membrosEquipeMarcados=new Set((g&&g.integrantes)||[]);
+ if($("buscarMembroEquipe"))$("buscarMembroEquipe").value="";
+ renderizarMembrosEquipe();
 }
+function equipeMatch(u){
+ var query=$("buscarMembroEquipe").value.trim().normalize("NFD")
+   .replace(/[\u0300-\u036f]/g,"").toUpperCase();
+ if(!query)return true;
+ return nomeFuncionarioVisivel(u).normalize("NFD")
+   .replace(/[\u0300-\u036f]/g,"").toUpperCase().includes(query);
+}
+function renderizarMembrosEquipe(){
+ var escolhidos=Array.from(membrosEquipeMarcados).sort(function(a,b){
+  return nomeFuncionarioVisivel(a).localeCompare(nomeFuncionarioVisivel(b),"pt-BR");
+ });
+ var filtrados=usuariosInventario.filter(equipeMatch);
+ $("qtdMembrosFiltrados").textContent=filtrados.length+" encontrado(s)";
+ $("qtdMembrosSelecionados").textContent=escolhidos.length+" selecionado(s)";
+ $("usuariosGrupo").innerHTML=filtrados.map(function(u){
+  return "<label class='equipe-membro"+(membrosEquipeMarcados.has(u)?" membro-marcado":"")+"'>"+
+   "<input type='checkbox' data-grupo-usuario value='"+esc(u)+"' "+
+   (membrosEquipeMarcados.has(u)?"checked":"")+
+   " data-grupo-selecao='1'>"+
+   "<span>"+esc(nomeFuncionarioVisivel(u))+"</span></label>";
+ }).join("")||"<div class='equipe-sem-resultados'>Nenhum funcionario encontrado.</div>";
+ // Remover chips pela posicao, evitando nomes e identificadores em JS inline.
+ $("membrosSelecionados").innerHTML=escolhidos.map(function(u,i){
+  return "<span class='equipe-chip'><span>"+esc(nomeFuncionarioVisivel(u))+"</span>"+
+   "<button type='button' data-equipe-remover='"+i+"' aria-label='Remover integrante'>×</button></span>";
+ }).join("")||"<div class='equipe-sem-resultados'>Nenhum integrante selecionado.</div>";
+ $("usuariosGrupo").querySelectorAll("[data-grupo-selecao]").forEach(function(el){
+   el.onchange=function(){grupoMarcar(el.value,el.checked)};
+ });
+ $("membrosSelecionados").querySelectorAll("[data-equipe-remover]").forEach(function(btn){
+  btn.onclick=function(){
+   var u=escolhidos[Number(btn.dataset.equipeRemover)];
+   if(u!==undefined){membrosEquipeMarcados.delete(u);renderizarMembrosEquipe()}
+  };
+ });
+}
+function grupoMarcar(u,marcado){
+ if(marcado)membrosEquipeMarcados.add(u);else membrosEquipeMarcados.delete(u);
+ renderizarMembrosEquipe();
+}
+function filtrarMembrosEquipe(){renderizarMembrosEquipe()}
+function marcarMembrosFiltrados(marcar){
+ var filtro=usuariosInventario.filter(equipeMatch);
+ if(marcar&&filtro.length>60&&!confirm("Selecionar "+filtro.length+" funcionarios encontrados?"))return;
+ filtro.forEach(function(u){if(marcar)membrosEquipeMarcados.add(u);else membrosEquipeMarcados.delete(u)});
+ renderizarMembrosEquipe();
+}
+window.BRGrupoMarcar=grupoMarcar;
+window.BRFiltrarMembrosEquipe=filtrarMembrosEquipe;
+window.BRMarcarMembrosFiltrados=marcarMembrosFiltrados;
 async function grupoCriar(){
  var nome=$("nomeGrupo").value.trim();if(!nome){aviso("Informe o nome do grupo.",true);return}
  try{
@@ -646,7 +701,7 @@ async function grupoCriar(){
 async function membrosSalvar(){
  var gid=$("grupoEditar").value;
  if(!gid){aviso("Selecione um grupo.",true);return}
- var integrantes=Array.from(document.querySelectorAll("[data-grupo-usuario]:checked")).map(function(x){return x.value});
+ var integrantes=Array.from(membrosEquipeMarcados);
  try{
   await api("/brastorno/inventario/grupos/"+encodeURIComponent(gid)+"/integrantes","POST",
    {cod_empresa:empresa,integrantes:integrantes});
@@ -1315,11 +1370,14 @@ $("filtroMetodoReposicao").value=metodoReposicao;
   perfil=await api("/brastorno/inventario/perfil");
   if(!perfil.inventario)throw Error("Usuario sem liberacao de inventario.");
   $("usuario").textContent=puro(perfil.usuario);
-  if(!perfil.inventario_gestor){
+  var gestor=!!perfil.inventario_gestor;
+  $("abaContagemLegada").hidden=gestor;
+  if(!gestor){
    document.querySelectorAll("[data-gestor]").forEach(function(x){x.hidden=true});
   }
-  var inicial=localStorage.getItem("br_invent_aba")||"contagem";
-  if(!perfil.inventario_gestor)inicial="contagem";
+  var inicial=localStorage.getItem("br_invent_aba")||(gestor?"conferencia":"contagem");
+  if(!gestor)inicial="contagem";
+  else if(inicial==="contagem")inicial="conferencia";
   trocarAba(inicial);
  }catch(e){$("corpo").innerHTML="<div class='erro-caixa'>"+esc(erroMsg(e))+
   "<br>Verifique a instalacao da API WEB e as permissoes CSENHA U_INVENT / U_INVENT_GESTOR.</div>";}
